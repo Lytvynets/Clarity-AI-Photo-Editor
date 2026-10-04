@@ -9,6 +9,8 @@
 /* Begin PBXBuildFile section */
 		18793D1E2CFF97EA0030D80D /* SDWebImageSwiftUI in Frameworks */ = {isa = PBXBuildFile; productRef = 18793D1D2CFF97EA0030D80D /* SDWebImageSwiftUI */; };
 		18A2A3C52D08B45C00C8276C /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 18A2A3C42D08B45C00C8276C /* StoreKit.framework */; };
+		7C1E5A0B2D3F4A6B8C9D0E13 /* GoogleMobileAds in Frameworks */ = {isa = PBXBuildFile; productRef = 7C1E5A0B2D3F4A6B8C9D0E12 /* GoogleMobileAds */; };
+		7C1E5A0B2D3F4A6B8C9D0E16 /* GoogleUserMessagingPlatform in Frameworks */ = {isa = PBXBuildFile; productRef = 7C1E5A0B2D3F4A6B8C9D0E15 /* GoogleUserMessagingPlatform */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -43,6 +45,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				18793D1E2CFF97EA0030D80D /* SDWebImageSwiftUI in Frameworks */,
+				7C1E5A0B2D3F4A6B8C9D0E13 /* GoogleMobileAds in Frameworks */,
+				7C1E5A0B2D3F4A6B8C9D0E16 /* GoogleUserMessagingPlatform in Frameworks */,
 				18A2A3C52D08B45C00C8276C /* StoreKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -96,6 +100,8 @@
 			name = PixeltaicAI;
 			packageProductDependencies = (
 				18793D1D2CFF97EA0030D80D /* SDWebImageSwiftUI */,
+				7C1E5A0B2D3F4A6B8C9D0E12 /* GoogleMobileAds */,
+				7C1E5A0B2D3F4A6B8C9D0E15 /* GoogleUserMessagingPlatform */,
 			);
 			productName = PixeltaicAI;
 			productReference = 188A483F2CC7BA56003DEB8C /* PixeltaicAI.app */;
@@ -127,6 +133,8 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				18793D1C2CFF97EA0030D80D /* XCRemoteSwiftPackageReference "SDWebImageSwiftUI" */,
+				7C1E5A0B2D3F4A6B8C9D0E11 /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */,
+				7C1E5A0B2D3F4A6B8C9D0E14 /* XCRemoteSwiftPackageReference "swift-package-manager-google-user-messaging-platform" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 188A48402CC7BA56003DEB8C /* Products */;
@@ -284,28 +292,29 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 14;
+				CURRENT_PROJECT_VERSION = 15;
 				DEVELOPMENT_ASSET_PATHS = "\"PixeltaicAI/Resource/Preview Content\"";
 				DEVELOPMENT_TEAM = 9XP4F76DYF;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = PixeltaicAI/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Pixeltaic AI: Pro Photo Editor";
+				INFOPLIST_KEY_CFBundleDisplayName = "Clarity: AI Photo Editor";
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "To save images to the gallery, you must grant access to the gallery";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UILaunchStoryboardName = "";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_UIUserInterfaceStyle = Dark;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.2;
+				MARKETING_VERSION = 2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "Vlad-Lytvynets.PixeltaicAI";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -324,28 +333,29 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 14;
+				CURRENT_PROJECT_VERSION = 15;
 				DEVELOPMENT_ASSET_PATHS = "\"PixeltaicAI/Resource/Preview Content\"";
 				DEVELOPMENT_TEAM = 9XP4F76DYF;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = PixeltaicAI/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Pixeltaic AI: Pro Photo Editor";
+				INFOPLIST_KEY_CFBundleDisplayName = "Clarity: AI Photo Editor";
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "To save images to the gallery, you must grant access to the gallery";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UILaunchStoryboardName = "";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_UIUserInterfaceStyle = Dark;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.2;
+				MARKETING_VERSION = 2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "Vlad-Lytvynets.PixeltaicAI";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -390,6 +400,22 @@
 				minimumVersion = 3.1.3;
 			};
 		};
+		7C1E5A0B2D3F4A6B8C9D0E11 /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/googleads/swift-package-manager-google-mobile-ads.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 13.0.0;
+			};
+		};
+		7C1E5A0B2D3F4A6B8C9D0E14 /* XCRemoteSwiftPackageReference "swift-package-manager-google-user-messaging-platform" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/googleads/swift-package-manager-google-user-messaging-platform.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 3.0.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -397,6 +423,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 18793D1C2CFF97EA0030D80D /* XCRemoteSwiftPackageReference "SDWebImageSwiftUI" */;
 			productName = SDWebImageSwiftUI;
+		};
+		7C1E5A0B2D3F4A6B8C9D0E12 /* GoogleMobileAds */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7C1E5A0B2D3F4A6B8C9D0E11 /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */;
+			productName = GoogleMobileAds;
+		};
+		7C1E5A0B2D3F4A6B8C9D0E15 /* GoogleUserMessagingPlatform */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7C1E5A0B2D3F4A6B8C9D0E14 /* XCRemoteSwiftPackageReference "swift-package-manager-google-user-messaging-platform" */;
+			productName = GoogleUserMessagingPlatform;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
