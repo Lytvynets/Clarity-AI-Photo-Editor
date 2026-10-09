@@ -45,6 +45,9 @@ enum AppDestination: Identifiable {
 final class Router: ObservableObject {
     @Published var tab: AppTab = .studio
     @Published var destination: AppDestination?
+    /// Top edge (screen coordinates) of the banner + tab bar strip at the bottom of the main
+    /// screen. 0 until measured. Pushed pages use it to keep their last buttons above the bar.
+    @Published var bottomBarMinY: CGFloat = 0
 
     func openEditor(tool: Tool, imageData: Data? = nil) {
         destination = .editor(id: UUID(), request: EditorRequest(tool: tool, imageData: imageData))

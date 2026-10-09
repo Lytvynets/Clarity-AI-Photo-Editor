@@ -40,7 +40,20 @@ enum ExportService {
         }
     }
 
+    /// Removes old shared copies from the temporary folder so they don't pile up.
+    private static func purgeOldTemporaryFiles(named name: String) {
+        let manager = FileManager.default
+        guard let urls = try? manager.contentsOfDirectory(at: manager.temporaryDirectory,
+                                                          includingPropertiesForKeys: [.contentModificationDateKey]) else { return }
+        let cutoff = Date().addingTimeInterval(-24 * 3600)
+        for url in urls where url.lastPathComponent.hasPrefix(name + "-") {
+            let modified = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+            if let modified, modified < cutoff { try? manager.removeItem(at: url) }
+        }
+    }
+
     static func temporaryFile(for data: Data, name: String = "Clarity") -> URL? {
+        purgeOldTemporaryFiles(named: name)
         let ext = data.isPNG ? "png" : "jpg"
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("\(name)-\(Int(Date().timeIntervalSince1970)).\(ext)")

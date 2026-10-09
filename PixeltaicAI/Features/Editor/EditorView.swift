@@ -16,6 +16,7 @@ struct EditorView: View {
     @State private var pickerItem: PhotosPickerItem?
     @State private var gateRequest: RunGateRequest?
     @State private var showPaywall = false
+    @State private var paywallPlacement = "editor"
     @State private var toast: String?
     @State private var shareURL: URL?
     @State private var showShare = false
@@ -59,8 +60,8 @@ struct EditorView: View {
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: vm.errorMessage)
         .preferredColorScheme(.dark)
-        .runGate($gateRequest, onUpgrade: { showPaywall = true })
-        .proPaywall(isPresented: $showPaywall)
+        .runGate($gateRequest, onUpgrade: { openPaywall("run_gate") })
+        .proPaywall(isPresented: $showPaywall, placement: paywallPlacement)
         .toast($toast)
         .sheet(isPresented: $showShare) {
             if let shareURL {
@@ -78,10 +79,16 @@ struct EditorView: View {
             Text("Allow Clarity AI to add photos in Settings so results can be saved to your library.")
         }
         .onAppear {
+            vm.isPro = subscription.isPro
+            AppAnalytics.log(AppAnalytics.Event.toolOpen,
+                             ["tool": request.tool.id, "has_photo": request.imageData == nil ? 0 : 1])
             if let data = request.imageData, vm.originalData == nil {
                 vm.setPhoto(data: data)
             }
             withAnimation(.easeInOut(duration: 2.4).repeatForever(autoreverses: true)) { floating = true }
+        }
+        .onChange(of: subscription.isPro) { value in
+            vm.isPro = value
         }
         .onChange(of: pickerItem) { item in
             guard let item else { return }
@@ -230,7 +237,7 @@ struct EditorView: View {
                 toolSwitcher
 
                 ScrollView(showsIndicators: false) {
-                    ToolPanel(vm: vm, isPro: subscription.isPro, onLocked: { showPaywall = true })
+                    ToolPanel(vm: vm, isPro: subscription.isPro, onLocked: { openPaywall("editor_locked") })
                         .padding(16)
                 }
                 .frame(height: min(geo.size.height * 0.40, 330))
@@ -290,15 +297,30 @@ struct EditorView: View {
         let isPro = subscription.isPro
         let start: () -> Void = {
             vm.run(library: library, isPro: isPro, refund: {
-                if !isPro { usage.refund(cost) }
+                if isPro { usage.proRefund(cost) } else { usage.refund(cost) }
             })
         }
 
         if isPro {
+            // Subscribers are not metered per tool, but every AI call costs real money, so there is
+            // a generous daily fair-use cap (smaller during the free trial).
+            let limit = subscription.proDailyLimit
+            guard usage.proCanAfford(cost, limit: limit) else {
+                vm.errorMessage = "You've reached today's Pro limit. \(usage.resetText)."
+                Haptics.warning()
+                AppAnalytics.log(AppAnalytics.Event.proLimitReached, ["tool": vm.tool.id, "limit": limit])
+                return
+            }
+            usage.proConsume(cost)
             start()
         } else {
-            gateRequest = RunGateRequest(cost: cost, title: vm.tool.title, action: start)
+            gateRequest = RunGateRequest(cost: cost, title: vm.tool.title, tool: vm.tool.id, action: start)
         }
+    }
+
+    private func openPaywall(_ placement: String) {
+        paywallPlacement = placement
+        showPaywall = true
     }
 
 
@@ -313,7 +335,7 @@ struct EditorView: View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 18) {
                 if let before = vm.originalImage, let after = vm.resultImage {
-                    BeforeAfterSlider(before: before, after: after, transparent: vm.resultIsTransparent)
+                    BeforeAfterSlider(before: before, after: after, transparent: vm.resultIsTransparent, verticalScrollFriendly: true)
                         .padding(.horizontal, 16)
                 }
 
@@ -356,7 +378,7 @@ struct EditorView: View {
 
                 if !subscription.isPro {
                     Button {
-                        showPaywall = true
+                        openPaywall("editor_watermark")
                     } label: {
                         HStack(spacing: 6) {
                             ProBadge(compact: true)
@@ -419,6 +441,7 @@ struct EditorView: View {
                 try await ExportService.saveToPhotos(prepared)
                 toast = "Saved to Photos"
                 Haptics.success()
+                AppAnalytics.log(AppAnalytics.Event.resultSave, ["tool": vm.tool.id, "watermark": watermark ? 1 : 0])
             } catch ExportError.permissionDenied {
                 showPermissionAlert = true
             } catch {
@@ -439,6 +462,7 @@ struct EditorView: View {
             if let url = ExportService.temporaryFile(for: prepared) {
                 shareURL = url
                 showShare = true
+                AppAnalytics.log(AppAnalytics.Event.resultShare, ["tool": vm.tool.id, "watermark": watermark ? 1 : 0])
             }
         }
     }

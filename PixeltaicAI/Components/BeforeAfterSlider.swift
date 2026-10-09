@@ -6,6 +6,9 @@ struct BeforeAfterSlider: View {
     let after: UIImage
     var transparent = false
     var autoReveal = true
+    /// When true, only horizontal drags move the slider, so a vertical swipe on a tall photo
+    /// still scrolls the page it sits in.
+    var verticalScrollFriendly = false
 
     @State private var position: CGFloat = 0.5
     @State private var didIntro = false
@@ -21,7 +24,7 @@ struct BeforeAfterSlider: View {
             let width = geo.size.width
             let height = geo.size.height
 
-            ZStack(alignment: .leading) {
+            let content = ZStack(alignment: .leading) {
                 if transparent {
                     CheckerboardView()
                         .frame(width: width, height: height)
@@ -77,20 +80,9 @@ struct BeforeAfterSlider: View {
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
                     .strokeBorder(Theme.stroke, lineWidth: 1)
             )
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { value in
-                        isDragging = true
-                        let fraction = value.location.x / max(width, 1)
-                        position = min(1, max(0, fraction))
-                    }
-                    .onEnded { _ in
-                        isDragging = false
-                        Haptics.tap()
-                    }
-            )
-            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isDragging)
+
+            interactive(content, width: width)
+                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isDragging)
         }
         .aspectRatio(aspect, contentMode: .fit)
         .onAppear {
@@ -100,6 +92,37 @@ struct BeforeAfterSlider: View {
             withAnimation(.easeInOut(duration: 1.2).delay(0.3)) {
                 position = 0.5
             }
+        }
+    }
+
+    @ViewBuilder
+    private func interactive<Content: View>(_ content: Content, width: CGFloat) -> some View {
+        if verticalScrollFriendly {
+            content.overlay(
+                HorizontalDragSurface(
+                    onBegan: { isDragging = true },
+                    onMove: { fraction in position = fraction },
+                    onEnded: {
+                        isDragging = false
+                        Haptics.tap()
+                    }
+                )
+            )
+        } else {
+            content
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            isDragging = true
+                            let fraction = value.location.x / max(width, 1)
+                            position = min(1, max(0, fraction))
+                        }
+                        .onEnded { _ in
+                            isDragging = false
+                            Haptics.tap()
+                        }
+                )
         }
     }
 
@@ -138,5 +161,79 @@ struct ImageCanvas: View {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .strokeBorder(Theme.stroke, lineWidth: 1)
         )
+    }
+}
+
+
+/// Transparent touch surface for the before/after slider. A horizontal drag (or a tap) moves the
+/// slider; a vertical drag is ignored, so the enclosing ScrollView can scroll even when the photo
+/// fills the whole screen.
+struct HorizontalDragSurface: UIViewRepresentable {
+
+    var onBegan: () -> Void
+    var onMove: (CGFloat) -> Void
+    var onEnded: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.backgroundColor = .clear
+
+        let pan = UIPanGestureRecognizer(target: context.coordinator,
+                                         action: #selector(Coordinator.handlePan(_:)))
+        pan.delegate = context.coordinator
+        view.addGestureRecognizer(pan)
+
+        let tap = UITapGestureRecognizer(target: context.coordinator,
+                                         action: #selector(Coordinator.handleTap(_:)))
+        view.addGestureRecognizer(tap)
+
+        context.coordinator.surface = self
+        return view
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        context.coordinator.surface = self
+    }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+
+        var surface: HorizontalDragSurface?
+
+        private func fraction(of gesture: UIGestureRecognizer) -> CGFloat? {
+            guard let view = gesture.view else { return nil }
+            let width = max(view.bounds.width, 1)
+            return min(1, max(0, gesture.location(in: view).x / width))
+        }
+
+        @objc func handlePan(_ gesture: UIPanGestureRecognizer) {
+            guard let surface, let value = fraction(of: gesture) else { return }
+            switch gesture.state {
+            case .began:
+                surface.onBegan()
+                surface.onMove(value)
+            case .changed:
+                surface.onMove(value)
+            case .ended, .cancelled, .failed:
+                surface.onEnded()
+            default:
+                break
+            }
+        }
+
+        @objc func handleTap(_ gesture: UITapGestureRecognizer) {
+            guard let surface, let value = fraction(of: gesture) else { return }
+            surface.onMove(value)
+            Haptics.tap()
+        }
+
+        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+            guard let pan = gestureRecognizer as? UIPanGestureRecognizer else { return true }
+            let velocity = pan.velocity(in: pan.view)
+            return abs(velocity.x) > abs(velocity.y)
+        }
     }
 }

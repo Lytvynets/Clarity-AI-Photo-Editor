@@ -71,8 +71,11 @@ enum Tool: String, CaseIterable, Identifiable {
 
     var runCost: Int {
         switch self {
-        case .enhance, .magic, .create: return 2
-        case .background, .blur, .color, .resize: return 1
+        case .enhance: return Limits.enhance
+        case .blur: return Limits.blur
+        case .magic: return Limits.magic
+        case .create: return Limits.createCost(images: 1)
+        case .background, .color, .resize: return 1
         }
     }
 

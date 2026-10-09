@@ -77,7 +77,7 @@ struct OnboardingView: View {
         }
         .preferredColorScheme(.dark)
         .animation(.easeInOut(duration: 0.25), value: page)
-        .proPaywall(isPresented: $showPaywall)
+        .proPaywall(isPresented: $showPaywall, placement: "onboarding")
         .onChange(of: showPaywall) { presented in
             if !presented && finishing { onFinish() }
         }

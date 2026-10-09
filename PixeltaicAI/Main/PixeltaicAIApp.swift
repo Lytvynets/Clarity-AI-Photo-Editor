@@ -10,6 +10,11 @@ struct PixeltaicAIApp: App {
     @StateObject private var library = LibraryStore()
     @StateObject private var router = Router()
 
+    init() {
+        FirebaseBootstrap.configureIfPossible()
+        RemoteSettings.shared.start()
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView()

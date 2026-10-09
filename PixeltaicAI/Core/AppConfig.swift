@@ -24,13 +24,38 @@ enum ProductID {
 
 
 enum FreeTier {
-    static let dailyRunUnits = 5
+    /// Daily budget of "run units" without a subscription (tunable in Remote Config).
+    static var dailyRunUnits: Int { RemoteSettings.shared.int(.freeDailyUnits) }
+    /// Longest side (px) a free-tier photo is sent to the AI at. Smaller uploads cost fewer
+    /// Claid credits; Pro keeps full quality.
+    static var maxInputSide: Int { RemoteSettings.shared.int(.freeMaxInputSide) }
     static let maxUpscaleFree = 2
     static let generateImagesFree = 1
     static let generateImagesPro = 4
     static let watermarkEnabled = true
     static let watermarkText = "Clarity: AI Photo Editor"
     static let allowRunWhenAdUnavailable = true
+}
+
+
+/// Fair-use limits and the real cost of each tool, all tunable from Firebase Remote Config.
+/// A "run unit" roughly mirrors one Claid credit, so the daily caps map to a real money ceiling.
+enum Limits {
+    /// Paying subscribers: generous, but not unlimited (every AI call costs real money).
+    static var proDailyUnits: Int { RemoteSettings.shared.int(.proDailyUnits) }
+    /// 3-day free trial: tighter, because a trial that gets cancelled brings no revenue.
+    static var trialDailyUnits: Int { RemoteSettings.shared.int(.trialDailyUnits) }
+
+    static var enhance: Int { RemoteSettings.shared.int(.costEnhance) }
+    static var blur: Int { RemoteSettings.shared.int(.costBlur) }
+    static var magic: Int { RemoteSettings.shared.int(.costMagic) }
+    /// Resize with "AI extend" paints new background (generative), so it costs more than a plain resize.
+    static var aiExtend: Int { RemoteSettings.shared.int(.costAIExtend) }
+
+    /// One image costs the base price; every extra image in the same prompt adds one unit.
+    static func createCost(images: Int) -> Int {
+        RemoteSettings.shared.int(.costCreate) + max(0, images - 1)
+    }
 }
 
 

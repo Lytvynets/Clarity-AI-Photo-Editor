@@ -25,6 +25,8 @@ final class AdManager: NSObject, ObservableObject {
     @Published private(set) var adsAllowed = false
     @Published private(set) var isRewardedReady = false
     @Published private(set) var isPrivacyOptionsRequired = false
+    /// Becomes true once the consent check (and the consent form, where the law requires one) is over.
+    @Published private(set) var consentResolved = false
 
     private var startTask: Task<Void, Never>?
     private var rewardedAd: RewardedAd?
@@ -43,10 +45,21 @@ final class AdManager: NSObject, ObservableObject {
         await startTask?.value
     }
 
+    /// Lets the launch paywall wait while the EU consent form is on screen — presenting both at
+    /// the same time makes SwiftUI drop the paywall. Returns at once when no consent flow is running.
+    func waitForConsentFlow(timeout: TimeInterval) async {
+        let deadline = Date().addingTimeInterval(timeout)
+        while startTask != nil, !consentResolved, Date() < deadline {
+            if Task.isCancelled { return }
+            try? await Task.sleep(nanoseconds: 150_000_000)
+        }
+    }
+
     private func performStart() async {
         #if canImport(UserMessagingPlatform)
         await gatherConsent()
         #endif
+        consentResolved = true
 
         #if canImport(UserMessagingPlatform)
         guard ConsentInformation.shared.canRequestAds else {
@@ -177,6 +190,7 @@ final class AdManager: NSObject, ObservableObject {
 
     func start() {}
     func ensureStarted() async {}
+    func waitForConsentFlow(timeout: TimeInterval) async {}
     func loadRewarded() async {}
     func showRewarded() async -> RewardOutcome { .unavailable }
     func presentPrivacyOptions() async {}

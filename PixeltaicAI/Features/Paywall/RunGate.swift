@@ -6,6 +6,8 @@ struct RunGateRequest: Identifiable {
     let id = UUID()
     let cost: Int
     let title: String
+    /// Tool id, used for analytics only.
+    var tool: String = ""
     let action: () -> Void
 }
 
@@ -24,7 +26,18 @@ struct RunGateSheet: View {
 
     private var canRun: Bool { usage.remaining >= request.cost }
 
+    /// The daily free budget is smaller than the price of this run, so no amount of waiting helps.
+    private var needsPro: Bool { request.cost > usage.dailyLimit }
+
+    private var heading: String {
+        if canRun { return "Unlock this run" }
+        return needsPro ? "This one is for Pro" : "Free runs used up"
+    }
+
     private var subtitle: String {
+        if needsPro {
+            return "\(request.title) needs more than the free daily allowance. Go Pro to run it."
+        }
         if canRun {
             var text = "Watch a short video and \(request.title) runs for free."
             if request.cost > 1 { text += " This one uses \(request.cost) runs." }
@@ -42,7 +55,7 @@ struct RunGateSheet: View {
                     .padding(.top, 10)
 
                 VStack(spacing: 8) {
-                    Text(canRun ? "Unlock this run" : "Free runs used up")
+                    Text(heading)
                         .font(.app(.title2, weight: .bold))
                         .foregroundColor(.white)
                     Text(subtitle)
@@ -71,18 +84,18 @@ struct RunGateSheet: View {
                         .disabled(isWorking)
 
                         Button {
-                            onUpgrade()
+                            upgradeTapped()
                         } label: {
                             HStack(spacing: 8) {
                                 ProBadge(compact: true)
-                                Text("Go Pro · no ads, no limits")
+                                Text("Go Pro · no ads, more runs")
                             }
                         }
                         .buttonStyle(SecondaryButtonStyle())
                         .disabled(isWorking)
                     } else {
                         Button {
-                            onUpgrade()
+                            upgradeTapped()
                         } label: {
                             HStack(spacing: 8) {
                                 Image(systemName: "crown.fill")
@@ -116,6 +129,8 @@ struct RunGateSheet: View {
         }
         .onAppear {
             withAnimation(.easeInOut(duration: 1.3).repeatForever(autoreverses: true)) { pulse = true }
+            AppAnalytics.log(AppAnalytics.Event.runGateView,
+                             ["tool": request.tool, "cost": request.cost, "can_run": canRun ? 1 : 0])
         }
         .animation(.easeInOut(duration: 0.25), value: notice)
     }
@@ -153,23 +168,33 @@ struct RunGateSheet: View {
         }
     }
 
+    private func upgradeTapped() {
+        AppAnalytics.log(AppAnalytics.Event.upgradeTap, ["tool": request.tool, "can_run": canRun ? 1 : 0])
+        onUpgrade()
+    }
+
     private func watch() {
         guard !isWorking else { return }
         isWorking = true
         notice = nil
+        let info: [String: Any] = ["tool": request.tool, "cost": request.cost]
+        AppAnalytics.log(AppAnalytics.Event.rewardedStart, info)
         Task {
             let outcome = await ads.showRewarded()
             isWorking = false
             switch outcome {
             case .earned:
+                AppAnalytics.log(AppAnalytics.Event.rewardedEarned, info)
                 approve()
             case .unavailable:
+                AppAnalytics.log(AppAnalytics.Event.rewardedUnavailable, info)
                 if FreeTier.allowRunWhenAdUnavailable {
                     approve()
                 } else {
                     notice = "No video is available right now. Please try again in a moment."
                 }
             case .skipped:
+                AppAnalytics.log(AppAnalytics.Event.rewardedSkipped, info)
                 Haptics.warning()
                 notice = "Watch the whole video to unlock your free run."
             }

@@ -5,6 +5,13 @@ import StoreKit
 
 struct PaywallView: View {
 
+    /// Where the paywall was opened from (analytics only).
+    let placement: String
+
+    init(placement: String = "other") {
+        self.placement = placement
+    }
+
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
     @EnvironmentObject private var subscription: SubscriptionManager
@@ -14,14 +21,35 @@ struct PaywallView: View {
     @State private var breathe = false
     @State private var appeared = false
     @State private var alertText: String?
+    @State private var loggedView = false
 
-    private let features: [(symbol: String, text: String)] = [
-        ("nosign", "No ads, ever"),
-        ("infinity", "Unlimited edits and creations"),
-        ("arrow.up.left.and.arrow.down.right", "4× AI upscale"),
-        ("square.grid.2x2.fill", "Up to 4 images per prompt"),
-        ("checkmark.seal.fill", "Clean exports without watermark")
-    ]
+    /// The content is laid out at two densities. The roomy one is used when the screen is tall
+    /// enough; smaller screens get the compact one. The page always scrolls, so on a very small
+    /// screen or with a large system font nothing is ever out of reach.
+    private static let regularLayoutMinHeight: CGFloat = 560
+
+    private enum Density {
+        case regular
+        case compact
+
+        var isCompact: Bool { self == .compact }
+    }
+
+    private var limitsFeature: String {
+        let free = max(1, FreeTier.dailyRunUnits)
+        let ratio = Limits.proDailyUnits / free
+        return ratio >= 2 ? "\(ratio)× more edits every day" : "Higher daily limits"
+    }
+
+    private var features: [(symbol: String, text: String)] {
+        [
+            ("nosign", "No ads, ever"),
+            ("arrow.up.left.and.arrow.down.right", "4× AI upscale"),
+            ("bolt.fill", limitsFeature),
+            ("square.grid.2x2.fill", "Up to 4 images per prompt"),
+            ("checkmark.seal.fill", "Clean exports, no watermark")
+        ]
+    }
 
 
     private struct Plan: Identifiable {
@@ -82,14 +110,12 @@ struct PaywallView: View {
             VStack(spacing: 0) {
                 topBar
 
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 22) {
-                        header
-                        featureList
-                        planSection
+                GeometryReader { geo in
+                    ScrollView(showsIndicators: false) {
+                        content(geo.size.height >= Self.regularLayoutMinHeight ? .regular : .compact)
+                            .frame(minHeight: geo.size.height, alignment: .top)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 16)
+                    .modifier(BounceOnlyWhenNeeded())
                 }
 
                 bottomBar
@@ -103,14 +129,32 @@ struct PaywallView: View {
             withAnimation(.easeInOut(duration: 2.2).repeatForever(autoreverses: true)) { glow = true }
             withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) { breathe = true }
             withAnimation(.easeOut(duration: 0.7)) { appeared = true }
+            if !loggedView {
+                loggedView = true
+                AppAnalytics.log(AppAnalytics.Event.paywallView, ["placement": placement])
+            }
         }
         .onChange(of: subscription.isPro) { isPro in
             if isPro { dismiss() }
         }
-        .alert("Clarity Ai Pro",
+        .alert("Clarity AI Pro",
                isPresented: Binding(get: { alertText != nil }, set: { if !$0 { alertText = nil } }),
                actions: { Button("OK", role: .cancel) {} },
                message: { Text(alertText ?? "") })
+    }
+
+
+    private func content(_ density: Density) -> some View {
+        VStack(spacing: 0) {
+            header(density)
+            Spacer(minLength: density.isCompact ? 10 : 14)
+            featureList(density)
+            Spacer(minLength: density.isCompact ? 10 : 14)
+            planSection(density)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 20)
+        .padding(.bottom, 10)
     }
 
 
@@ -126,84 +170,109 @@ struct PaywallView: View {
                     .padding(.horizontal, 6)
             }
             Spacer()
-            IconButton(symbol: "xmark", size: 36) { dismiss() }
+            IconButton(symbol: "xmark", size: 36) { closeTapped() }
         }
         .padding(.horizontal, 20)
-        .padding(.top, 10)
-        .padding(.bottom, 4)
+        .padding(.top, 6)
+        .padding(.bottom, 2)
     }
 
-    private var header: some View {
-        VStack(spacing: 12) {
+    private func header(_ density: Density) -> some View {
+        let compact = density.isCompact
+        let disc: CGFloat = compact ? 44 : 60
+        let glowSize: CGFloat = compact ? 76 : 100
+        return VStack(spacing: compact ? 3 : 5) {
             ZStack {
                 Circle()
                     .fill(Theme.goldGradient)
                     .opacity(0.35)
-                    .frame(width: 130, height: 130)
-                    .blur(radius: 26)
+                    .frame(width: glowSize, height: glowSize)
+                    .blur(radius: compact ? 18 : 22)
                     .scaleEffect(glow ? 1.25 : 0.9)
 
                 Circle()
                     .fill(Theme.goldGradient)
-                    .frame(width: 84, height: 84)
+                    .frame(width: disc, height: disc)
                     .overlay(Circle().strokeBorder(Color.white.opacity(0.4), lineWidth: 1.5))
-                    .shadow(color: Theme.gold.opacity(0.6), radius: 20, x: 0, y: 8)
+                    .shadow(color: Theme.gold.opacity(0.6), radius: compact ? 14 : 18, x: 0, y: compact ? 5 : 7)
 
                 Image(systemName: "crown.fill")
-                    .font(.system(size: 36, weight: .bold))
+                    .font(.system(size: compact ? 19 : 26, weight: .bold))
                     .foregroundColor(Color(hex: 0x3A1E00))
                     .rotationEffect(.degrees(glow ? 4 : -4))
             }
-            .frame(height: 120)
+            .frame(height: compact ? 56 : 78)
 
-            Text("Clarity Ai Pro")
-                .font(.app(.largeTitle, weight: .heavy))
+            Text("Clarity AI Pro")
+                .font(.app(compact ? .title2 : .title, weight: .heavy))
                 .foregroundColor(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
 
             Text("Everything unlocked. Nothing in your way.")
-                .font(.app(.subheadline))
+                .font(.app(compact ? .footnote : .subheadline))
                 .foregroundColor(Theme.textSecondary)
                 .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .opacity(appeared ? 1 : 0)
         .offset(y: appeared ? 0 : 16)
     }
 
-    private var featureList: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            ForEach(Array(features.enumerated()), id: \.offset) { index, feature in
-                HStack(spacing: 14) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(Theme.brandGradient)
-                            .frame(width: 34, height: 34)
-                        Image(systemName: feature.symbol)
-                            .font(.system(size: 15, weight: .bold))
-                            .foregroundColor(.white)
+    private func featureList(_ density: Density) -> some View {
+        let compact = density.isCompact
+        let rows = stride(from: 0, to: features.count, by: 2).map { start in
+            Array(start..<min(start + 2, features.count))
+        }
+        return VStack(alignment: .leading, spacing: compact ? 8 : 11) {
+            ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                HStack(alignment: .center, spacing: 10) {
+                    ForEach(row, id: \.self) { index in
+                        featureCell(features[index], index: index, compact: compact)
                     }
-                    Text(feature.text)
-                        .font(.app(.body, weight: .semibold))
-                        .foregroundColor(.white)
-                    Spacer()
+                    if row.count == 1 { Spacer(minLength: 0) }
                 }
-                .opacity(appeared ? 1 : 0)
-                .offset(x: appeared ? 0 : -24)
-                .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.12 * Double(index) + 0.15), value: appeared)
             }
         }
-        .padding(18)
-        .glassCard(radius: 24)
+        .padding(compact ? 13 : 16)
+        .glassCard(radius: compact ? 20 : 24)
     }
 
-    private var planSection: some View {
-        VStack(spacing: 12) {
+    private func featureCell(_ feature: (symbol: String, text: String), index: Int, compact: Bool) -> some View {
+        let tile: CGFloat = compact ? 26 : 30
+        return HStack(spacing: 8) {
+            ZStack {
+                RoundedRectangle(cornerRadius: compact ? 8 : 9, style: .continuous)
+                    .fill(Theme.brandGradient)
+                    .frame(width: tile, height: tile)
+                Image(systemName: feature.symbol)
+                    .font(.system(size: compact ? 12 : 13, weight: .bold))
+                    .foregroundColor(.white)
+            }
+            Text(feature.text)
+                .font(.app(compact ? .caption : .footnote, weight: .semibold))
+                .foregroundColor(.white)
+                .lineLimit(2)
+                .minimumScaleFactor(0.85)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .opacity(appeared ? 1 : 0)
+        .offset(x: appeared ? 0 : -24)
+        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1 * Double(index) + 0.15), value: appeared)
+    }
+
+    private func planSection(_ density: Density) -> some View {
+        let compact = density.isCompact
+        return VStack(spacing: compact ? 8 : 10) {
             if plans.isEmpty {
                 ForEach(0..<3, id: \.self) { _ in
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    RoundedRectangle(cornerRadius: compact ? 18 : 20, style: .continuous)
                         .fill(Color.white.opacity(0.06))
-                        .frame(height: 74)
+                        .frame(height: compact ? 56 : 66)
                         .shimmering()
-                        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                        .clipShape(RoundedRectangle(cornerRadius: compact ? 18 : 20, style: .continuous))
                 }
                 if !subscription.isLoadingProducts {
                     Button {
@@ -216,35 +285,37 @@ struct PaywallView: View {
                 }
             } else {
                 ForEach(plans) { plan in
-                    planRow(plan)
+                    planRow(plan, compact: compact)
                 }
             }
         }
     }
 
-    private func planRow(_ plan: Plan) -> some View {
+    private func planRow(_ plan: Plan, compact: Bool) -> some View {
         let selected = plan.id == selectedPlan?.id
+        let radius: CGFloat = compact ? 18 : 20
         return Button {
             Haptics.select()
+            AppAnalytics.log(AppAnalytics.Event.paywallPlanSelect, ["product_id": plan.id, "placement": placement])
             withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { selectedID = plan.id }
         } label: {
-            HStack(spacing: 14) {
+            HStack(spacing: compact ? 12 : 14) {
                 ZStack {
                     Circle()
                         .strokeBorder(selected ? Theme.fuchsia : Theme.textTertiary, lineWidth: 2)
-                        .frame(width: 24, height: 24)
+                        .frame(width: compact ? 22 : 24, height: compact ? 22 : 24)
                     if selected {
                         Circle()
                             .fill(Theme.brandGradient)
-                            .frame(width: 14, height: 14)
+                            .frame(width: compact ? 12 : 14, height: compact ? 12 : 14)
                             .transition(.scale)
                     }
                 }
 
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: compact ? 1 : 2) {
                     HStack(spacing: 8) {
                         Text(plan.title)
-                            .font(.app(.headline, weight: .bold))
+                            .font(.app(compact ? .subheadline : .headline, weight: .bold))
                             .foregroundColor(.white)
                         if let badge = plan.badge {
                             Text(badge)
@@ -256,28 +327,31 @@ struct PaywallView: View {
                         }
                     }
                     Text(plan.detail)
-                        .font(.app(.footnote))
+                        .font(.app(compact ? .caption : .footnote))
                         .foregroundColor(Theme.textSecondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
                 }
 
                 Spacer(minLength: 8)
 
-                VStack(alignment: .trailing, spacing: 2) {
+                VStack(alignment: .trailing, spacing: 1) {
                     Text(plan.product.displayPrice)
-                        .font(.app(.headline, weight: .bold))
+                        .font(.app(compact ? .subheadline : .headline, weight: .bold))
                         .foregroundColor(.white)
                     Text("per \(plan.period)")
                         .font(.app(.caption))
                         .foregroundColor(Theme.textSecondary)
                 }
             }
-            .padding(16)
+            .padding(.horizontal, compact ? 14 : 16)
+            .padding(.vertical, compact ? 10 : 12)
             .background(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
                     .fill(Color.white.opacity(selected ? 0.13 : 0.05))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
                     .strokeBorder(selected ? AnyShapeStyle(Theme.brandGradient) : AnyShapeStyle(Theme.stroke),
                                   lineWidth: selected ? 2 : 1)
             )
@@ -287,7 +361,7 @@ struct PaywallView: View {
     }
 
     private var bottomBar: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 8) {
             Button {
                 purchase()
             } label: {
@@ -316,8 +390,8 @@ struct PaywallView: View {
             }
         }
         .padding(.horizontal, 20)
-        .padding(.top, 12)
-        .padding(.bottom, 8)
+        .padding(.top, 10)
+        .padding(.bottom, 6)
         .background(
             LinearGradient(colors: [Theme.bg1.opacity(0), Theme.bg1.opacity(0.96)], startPoint: .top, endPoint: .bottom)
                 .ignoresSafeArea()
@@ -335,28 +409,44 @@ struct PaywallView: View {
     }
 
 
+    private func closeTapped() {
+        AppAnalytics.log(AppAnalytics.Event.paywallClose, ["placement": placement])
+        dismiss()
+    }
+
     private func purchase() {
         guard let plan = selectedPlan else { return }
         Haptics.medium()
+        let info: [String: Any] = [
+            "product_id": plan.id,
+            "trial": plan.trial ? 1 : 0,
+            "placement": placement
+        ]
+        AppAnalytics.log(AppAnalytics.Event.purchaseStart, info)
         Task {
             let outcome = await subscription.purchase(plan.product)
             switch outcome {
             case .success:
+                AppAnalytics.log(AppAnalytics.Event.purchaseSuccess, info)
                 Haptics.success()
                 dismiss()
             case .cancelled:
-                break
+                AppAnalytics.log(AppAnalytics.Event.purchaseCancel, info)
             case .pending:
+                AppAnalytics.log(AppAnalytics.Event.purchasePending, info)
                 alertText = "Your purchase is waiting for approval. You'll get Pro as soon as it's confirmed."
             case .failed(let text):
+                AppAnalytics.log(AppAnalytics.Event.purchaseFail, info)
                 alertText = text
             }
         }
     }
 
     private func restore() {
+        AppAnalytics.log(AppAnalytics.Event.restoreTap, ["placement": placement])
         Task {
             let restored = await subscription.restore()
+            AppAnalytics.log(AppAnalytics.Event.restoreResult, ["restored": restored ? 1 : 0, "placement": placement])
             if restored {
                 Haptics.success()
                 dismiss()
@@ -368,20 +458,33 @@ struct PaywallView: View {
 }
 
 
+/// Keeps the page still when everything fits, and lets it scroll (with bounce) when it doesn't.
+private struct BounceOnlyWhenNeeded: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 16.4, *) {
+            content.scrollBounceBehavior(.basedOnSize)
+        } else {
+            content
+        }
+    }
+}
+
+
 struct PaywallCover: ViewModifier {
     @Binding var isPresented: Bool
+    var placement: String
     @EnvironmentObject private var subscription: SubscriptionManager
 
     func body(content: Content) -> some View {
         content.fullScreenCover(isPresented: $isPresented) {
-            PaywallView()
+            PaywallView(placement: placement)
                 .environmentObject(subscription)
         }
     }
 }
 
 extension View {
-    func proPaywall(isPresented: Binding<Bool>) -> some View {
-        modifier(PaywallCover(isPresented: isPresented))
+    func proPaywall(isPresented: Binding<Bool>, placement: String = "other") -> some View {
+        modifier(PaywallCover(isPresented: isPresented, placement: placement))
     }
 }

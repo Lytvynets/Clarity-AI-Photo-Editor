@@ -86,7 +86,7 @@ final class ClaidClient {
                 request.setValue(Secrets.proxySecret, forHTTPHeaderField: "X-App-Secret")
             }
         } else {
-            request.setValue("Bearer \(Secrets.claidAPIKey)", forHTTPHeaderField: "Authorization")
+            request.setValue("Bearer \(ClaidKey.current)", forHTTPHeaderField: "Authorization")
         }
     }
 
@@ -241,14 +241,41 @@ final class ClaidClient {
 
 
     private func send(_ request: URLRequest, body: Data?) async throws -> (Data, URLResponse) {
-        do {
-            if let body {
-                return try await session.upload(for: request, from: body)
+        var current = request
+
+        if !usesProxy {
+            await ClaidKey.prepare()
+            if ClaidKey.current.isEmpty {
+                print("⚠️ Claid: no API key (Remote Config empty and Secrets.swift has none)")
+                throw ClaidError.unauthorized
             }
-            return try await session.data(for: request)
-        } catch let urlError as URLError {
-            if urlError.code == .cancelled { throw CancellationError() }
-            throw Self.map(urlError)
+            authorize(&current)
+        }
+
+        var retriedWithFreshKey = false
+        while true {
+            do {
+                let result: (Data, URLResponse)
+                if let body {
+                    result = try await session.upload(for: current, from: body)
+                } else {
+                    result = try await session.data(for: current)
+                }
+
+                if !usesProxy, !retriedWithFreshKey,
+                   let http = result.1 as? HTTPURLResponse,
+                   http.statusCode == 401 || http.statusCode == 403 {
+                    retriedWithFreshKey = true
+                    if await RemoteSettings.shared.refreshClaidKeyAfterRejection() {
+                        authorize(&current)
+                        continue
+                    }
+                }
+                return result
+            } catch let urlError as URLError {
+                if urlError.code == .cancelled { throw CancellationError() }
+                throw Self.map(urlError)
+            }
         }
     }
 

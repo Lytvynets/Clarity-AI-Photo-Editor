@@ -105,6 +105,9 @@ final class CreateViewModel: ObservableObject {
         let sent = finalPrompt
         let shown = prompt.trimmed
         let guidance = strictness
+        let startedAt = Date()
+        let runInfo: [String: Any] = ["tool": Tool.create.id, "images": requested]
+        AppAnalytics.log(AppAnalytics.Event.runStart, runInfo)
 
         task = Task { [weak self] in
             guard let self else { return }
@@ -133,19 +136,29 @@ final class CreateViewModel: ObservableObject {
                 self.selectedIndex = 0
                 self.phase = .results
                 Haptics.success()
+                var info = runInfo
+                info["seconds"] = Int(Date().timeIntervalSince(startedAt).rounded())
+                AppAnalytics.log(AppAnalytics.Event.runSuccess, info)
             } catch is CancellationError {
                 refund()
                 self.phase = .input
+                AppAnalytics.log(AppAnalytics.Event.runCancel, runInfo)
             } catch let error as ClaidError {
                 refund()
                 self.errorMessage = error.errorDescription
                 self.phase = .input
                 Haptics.error()
+                var info = runInfo
+                info["error"] = error.analyticsCode
+                AppAnalytics.log(AppAnalytics.Event.runFail, info)
             } catch {
                 refund()
                 self.errorMessage = "Something went wrong. Please try again."
                 self.phase = .input
                 Haptics.error()
+                var info = runInfo
+                info["error"] = "unknown"
+                AppAnalytics.log(AppAnalytics.Event.runFail, info)
             }
         }
     }
@@ -162,13 +175,22 @@ struct CreateView: View {
     @StateObject private var vm = CreateViewModel()
     @State private var gateRequest: RunGateRequest?
     @State private var showPaywall = false
+    @State private var paywallPlacement = "create"
     @State private var toast: String?
     @State private var shareURL: URL?
     @State private var showShare = false
     @State private var showPermissionAlert = false
     @State private var isSaving = false
 
-    private var cost: Int { Tool.create.runCost }
+    /// Free users always get one image; subscribers pay one extra unit per additional image.
+    private var cost: Int {
+        Limits.createCost(images: subscription.isPro ? vm.count : FreeTier.generateImagesFree)
+    }
+
+    private func openPaywall(_ placement: String) {
+        paywallPlacement = placement
+        showPaywall = true
+    }
 
     var body: some View {
         ZStack {
@@ -199,8 +221,11 @@ struct CreateView: View {
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: vm.errorMessage)
         .preferredColorScheme(.dark)
-        .runGate($gateRequest, onUpgrade: { showPaywall = true })
-        .proPaywall(isPresented: $showPaywall)
+        .runGate($gateRequest, onUpgrade: { openPaywall("run_gate") })
+        .proPaywall(isPresented: $showPaywall, placement: paywallPlacement)
+        .onAppear {
+            AppAnalytics.log(AppAnalytics.Event.toolOpen, ["tool": Tool.create.id])
+        }
         .toast($toast)
         .sheet(isPresented: $showShare) {
             if let shareURL { ShareSheet(items: [shareURL]) }
@@ -269,7 +294,7 @@ struct CreateView: View {
                     Image(systemName: "wand.and.stars")
                     Text("Generate")
                     if !subscription.isPro {
-                        Text("\(cost) runs")
+                        Text(cost == 1 ? "1 run" : "\(cost) runs")
                             .font(.app(.caption, weight: .bold))
                             .padding(.horizontal, 8)
                             .padding(.vertical, 3)
@@ -342,7 +367,7 @@ struct CreateView: View {
                 OptionItem(title: "1", value: 1),
                 OptionItem(title: "2", value: 2, locked: !subscription.isPro),
                 OptionItem(title: "4", value: 4, locked: !subscription.isPro)
-            ], selection: $vm.count, onLockedTap: { showPaywall = true })
+            ], selection: $vm.count, onLockedTap: { openPaywall("create_locked") })
         }
     }
 
@@ -378,13 +403,21 @@ struct CreateView: View {
         let charged = cost
         let start: () -> Void = {
             vm.generate(library: library, isPro: isPro, refund: {
-                if !isPro { usage.refund(charged) }
+                if isPro { usage.proRefund(charged) } else { usage.refund(charged) }
             })
         }
         if isPro {
+            let limit = subscription.proDailyLimit
+            guard usage.proCanAfford(charged, limit: limit) else {
+                vm.errorMessage = "You've reached today's Pro limit. \(usage.resetText)."
+                Haptics.warning()
+                AppAnalytics.log(AppAnalytics.Event.proLimitReached, ["tool": Tool.create.id, "limit": limit])
+                return
+            }
+            usage.proConsume(charged)
             start()
         } else {
-            gateRequest = RunGateRequest(cost: charged, title: "Create", action: start)
+            gateRequest = RunGateRequest(cost: charged, title: "Create", tool: Tool.create.id, action: start)
         }
     }
 
@@ -450,7 +483,7 @@ struct CreateView: View {
 
                 if !subscription.isPro {
                     Button {
-                        showPaywall = true
+                        openPaywall("create_watermark")
                     } label: {
                         HStack(spacing: 6) {
                             ProBadge(compact: true)
@@ -513,6 +546,7 @@ struct CreateView: View {
                 try await ExportService.saveToPhotos(prepared)
                 toast = "Saved to Photos"
                 Haptics.success()
+                AppAnalytics.log(AppAnalytics.Event.resultSave, ["tool": Tool.create.id, "watermark": watermark ? 1 : 0])
             } catch ExportError.permissionDenied {
                 showPermissionAlert = true
             } catch {
@@ -533,6 +567,7 @@ struct CreateView: View {
             if let url = ExportService.temporaryFile(for: prepared) {
                 shareURL = url
                 showShare = true
+                AppAnalytics.log(AppAnalytics.Event.resultShare, ["tool": Tool.create.id, "watermark": watermark ? 1 : 0])
             }
         }
     }

@@ -14,16 +14,22 @@ final class SubscriptionManager: ObservableObject {
     }
 
     @Published private(set) var isPro: Bool
+    /// True while the active subscription is still inside its free introductory trial.
+    @Published private(set) var isTrial: Bool
     @Published private(set) var products: [Product] = []
     @Published private(set) var trialEligible = false
     @Published private(set) var isLoadingProducts = false
     @Published private(set) var isPurchasing = false
 
     private let cacheKey = "pro.cached.v2"
+    private let trialCacheKey = "pro.trial.v1"
     private var updatesTask: Task<Void, Never>?
 
     init() {
-        isPro = UserDefaults.standard.bool(forKey: cacheKey)
+        let cachedPro = UserDefaults.standard.bool(forKey: cacheKey)
+        isPro = cachedPro
+        isTrial = cachedPro && UserDefaults.standard.bool(forKey: trialCacheKey)
+        AppAnalytics.plan = Self.planName(pro: cachedPro, trial: isTrial)
         updatesTask = listenForTransactions()
         Task { await self.refresh() }
     }
@@ -32,6 +38,9 @@ final class SubscriptionManager: ObservableObject {
     func product(_ id: String) -> Product? {
         products.first { $0.id == id }
     }
+
+    /// Daily fair-use budget for the current subscription state.
+    var proDailyLimit: Int { isTrial ? Limits.trialDailyUnits : Limits.proDailyUnits }
 
     var yearly: Product? { product(ProductID.yearly) }
     var monthly: Product? { product(ProductID.monthly) }
@@ -80,19 +89,29 @@ final class SubscriptionManager: ObservableObject {
 
     func refreshEntitlements() async {
         var active = false
+        var inTrial = false
         for await result in Transaction.currentEntitlements {
             guard case .verified(let transaction) = result else { continue }
             guard ProductID.all.contains(transaction.productID) else { continue }
             if transaction.revocationDate != nil { continue }
             if let expiration = transaction.expirationDate, expiration < Date() { continue }
             active = true
+            if transaction.offerType == .introductory { inTrial = true }
         }
-        setPro(active)
+        setPro(active, trial: active && inTrial)
     }
 
-    private func setPro(_ value: Bool) {
+    private func setPro(_ value: Bool, trial: Bool = false) {
         if isPro != value { isPro = value }
+        if isTrial != trial { isTrial = trial }
         UserDefaults.standard.set(value, forKey: cacheKey)
+        UserDefaults.standard.set(trial, forKey: trialCacheKey)
+        AppAnalytics.plan = Self.planName(pro: value, trial: trial)
+    }
+
+    private static func planName(pro: Bool, trial: Bool) -> String {
+        if !pro { return "free" }
+        return trial ? "trial" : "pro"
     }
 
 
@@ -106,7 +125,7 @@ final class SubscriptionManager: ObservableObject {
                 switch verification {
                 case .verified(let transaction):
                     await transaction.finish()
-                    setPro(true)
+                    setPro(true, trial: transaction.offerType == .introductory)
                     await refreshEntitlements()
                     return .success
                 case .unverified:

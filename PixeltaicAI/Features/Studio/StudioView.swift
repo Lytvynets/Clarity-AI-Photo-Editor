@@ -42,7 +42,7 @@ struct StudioView: View {
             .padding(.top, 12)
             .padding(.bottom, 24)
         }
-        .proPaywall(isPresented: $showPaywall)
+        .proPaywall(isPresented: $showPaywall, placement: "studio")
         .onAppear {
             withAnimation(.easeOut(duration: 0.1)) { appeared = true }
             withAnimation(.easeInOut(duration: 3).repeatForever(autoreverses: true)) { floating = true }
@@ -57,7 +57,7 @@ struct StudioView: View {
                     .font(.app(.largeTitle, weight: .heavy))
                     .foregroundColor(.white)
                 if subscription.isPro {
-                    Text("Pro · everything unlocked")
+                    Text("Pro · all tools unlocked")
                         .font(.app(.subheadline, weight: .medium))
                         .foregroundColor(Theme.gold)
                 } else {
@@ -273,7 +273,7 @@ struct StudioView: View {
                     Text("Go Pro")
                         .font(.app(.headline, weight: .bold))
                         .foregroundColor(.white)
-                    Text("No ads · Unlimited runs · 4× upscale")
+                    Text("No ads · Higher daily limits · 4× upscale")
                         .font(.app(.caption))
                         .foregroundColor(Theme.textSecondary)
                         .multilineTextAlignment(.leading)

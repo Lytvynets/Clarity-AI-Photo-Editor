@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>API_KEY</key>
+	<string>AIzaSyD1LvtB9RC91K-sdQ01-HB-MpRqaXe5jQA</string>
+	<key>GCM_SENDER_ID</key>
+	<string>640912471890</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>Vlad-Lytvynets.PixeltaicAI</string>
+	<key>PROJECT_ID</key>
+	<string>clarity-ai-photo-editor</string>
+	<key>STORAGE_BUCKET</key>
+	<string>clarity-ai-photo-editor.firebasestorage.app</string>
+	<key>IS_ADS_ENABLED</key>
+	<false/>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<true/>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true/>
+	<key>IS_GCM_ENABLED</key>
+	<true/>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true/>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:640912471890:ios:7fd32e11b64efc1debac8b</string>
+</dict>
+</plist>

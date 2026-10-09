@@ -1,13 +1,16 @@
 
-
 import Foundation
 
 @MainActor
 final class UsageManager: ObservableObject {
 
+    /// Run units spent today on the free plan.
     @Published private(set) var used: Int
+    /// Run units spent today by a subscriber (Pro or trial). Only used for the fair-use cap.
+    @Published private(set) var proUsed: Int
 
     private let usedKey = "usage.used.v2"
+    private let proUsedKey = "usage.pro.used.v1"
     private let dayKey = "usage.day.v2"
 
     init() {
@@ -16,11 +19,15 @@ final class UsageManager: ObservableObject {
         if defaults.string(forKey: dayKey) != today {
             defaults.set(today, forKey: dayKey)
             defaults.set(0, forKey: usedKey)
+            defaults.set(0, forKey: proUsedKey)
             used = 0
+            proUsed = 0
         } else {
             used = defaults.integer(forKey: usedKey)
+            proUsed = defaults.integer(forKey: proUsedKey)
         }
     }
+
 
     var dailyLimit: Int { FreeTier.dailyRunUnits }
     var remaining: Int { max(0, dailyLimit - used) }
@@ -41,11 +48,34 @@ final class UsageManager: ObservableObject {
         persist()
     }
 
+
+    func proRemaining(limit: Int) -> Int { max(0, limit - proUsed) }
+
+    func proCanAfford(_ cost: Int, limit: Int) -> Bool {
+        rollIfNeeded()
+        // A single run that costs more than the whole daily budget is still allowed once a day,
+        // so a mis-set limit can never lock a subscriber out of a tool for good.
+        return proRemaining(limit: limit) >= min(cost, limit)
+    }
+
+    func proConsume(_ cost: Int) {
+        rollIfNeeded()
+        proUsed += cost
+        persist()
+    }
+
+    func proRefund(_ cost: Int) {
+        proUsed = max(0, proUsed - cost)
+        persist()
+    }
+
+
     func rollIfNeeded() {
         let today = Self.dayStamp()
         if UserDefaults.standard.string(forKey: dayKey) != today {
             UserDefaults.standard.set(today, forKey: dayKey)
             used = 0
+            proUsed = 0
             persist()
         }
     }
@@ -68,6 +98,7 @@ final class UsageManager: ObservableObject {
 
     private func persist() {
         UserDefaults.standard.set(used, forKey: usedKey)
+        UserDefaults.standard.set(proUsed, forKey: proUsedKey)
     }
 
     private static func dayStamp() -> String {

@@ -11,6 +11,8 @@
 		18A2A3C52D08B45C00C8276C /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 18A2A3C42D08B45C00C8276C /* StoreKit.framework */; };
 		7C1E5A0B2D3F4A6B8C9D0E13 /* GoogleMobileAds in Frameworks */ = {isa = PBXBuildFile; productRef = 7C1E5A0B2D3F4A6B8C9D0E12 /* GoogleMobileAds */; };
 		7C1E5A0B2D3F4A6B8C9D0E16 /* GoogleUserMessagingPlatform in Frameworks */ = {isa = PBXBuildFile; productRef = 7C1E5A0B2D3F4A6B8C9D0E15 /* GoogleUserMessagingPlatform */; };
+		7C1E5A0B2D3F4A6B8C9D0E23 /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = 7C1E5A0B2D3F4A6B8C9D0E22 /* FirebaseAnalytics */; };
+		7C1E5A0B2D3F4A6B8C9D0E25 /* FirebaseRemoteConfig in Frameworks */ = {isa = PBXBuildFile; productRef = 7C1E5A0B2D3F4A6B8C9D0E24 /* FirebaseRemoteConfig */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -46,6 +48,8 @@
 			files = (
 				18793D1E2CFF97EA0030D80D /* SDWebImageSwiftUI in Frameworks */,
 				7C1E5A0B2D3F4A6B8C9D0E13 /* GoogleMobileAds in Frameworks */,
+				7C1E5A0B2D3F4A6B8C9D0E25 /* FirebaseRemoteConfig in Frameworks */,
+				7C1E5A0B2D3F4A6B8C9D0E23 /* FirebaseAnalytics in Frameworks */,
 				7C1E5A0B2D3F4A6B8C9D0E16 /* GoogleUserMessagingPlatform in Frameworks */,
 				18A2A3C52D08B45C00C8276C /* StoreKit.framework in Frameworks */,
 			);
@@ -101,6 +105,8 @@
 			packageProductDependencies = (
 				18793D1D2CFF97EA0030D80D /* SDWebImageSwiftUI */,
 				7C1E5A0B2D3F4A6B8C9D0E12 /* GoogleMobileAds */,
+				7C1E5A0B2D3F4A6B8C9D0E24 /* FirebaseRemoteConfig */,
+				7C1E5A0B2D3F4A6B8C9D0E22 /* FirebaseAnalytics */,
 				7C1E5A0B2D3F4A6B8C9D0E15 /* GoogleUserMessagingPlatform */,
 			);
 			productName = PixeltaicAI;
@@ -132,6 +138,7 @@
 			mainGroup = 188A48362CC7BA56003DEB8C;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				7C1E5A0B2D3F4A6B8C9D0E21 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
 				18793D1C2CFF97EA0030D80D /* XCRemoteSwiftPackageReference "SDWebImageSwiftUI" */,
 				7C1E5A0B2D3F4A6B8C9D0E11 /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */,
 				7C1E5A0B2D3F4A6B8C9D0E14 /* XCRemoteSwiftPackageReference "swift-package-manager-google-user-messaging-platform" */,
@@ -416,6 +423,14 @@
 				minimumVersion = 3.0.0;
 			};
 		};
+		7C1E5A0B2D3F4A6B8C9D0E21 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.0.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -433,6 +448,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 7C1E5A0B2D3F4A6B8C9D0E14 /* XCRemoteSwiftPackageReference "swift-package-manager-google-user-messaging-platform" */;
 			productName = GoogleUserMessagingPlatform;
+		};
+		7C1E5A0B2D3F4A6B8C9D0E22 /* FirebaseAnalytics */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7C1E5A0B2D3F4A6B8C9D0E21 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAnalytics;
+		};
+		7C1E5A0B2D3F4A6B8C9D0E24 /* FirebaseRemoteConfig */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7C1E5A0B2D3F4A6B8C9D0E21 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseRemoteConfig;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

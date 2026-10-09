@@ -24,6 +24,8 @@ final class EditorViewModel: ObservableObject {
     @Published private(set) var faceHint: String?
     @Published var statusText = ""
     @Published var errorMessage: String?
+    /// Kept in sync by the view; free photos are sent to the AI at a smaller size (see `FreeTier`).
+    @Published var isPro = false
 
     @Published var enhance = EnhanceParams()
     @Published var background = BackgroundParams()
@@ -46,7 +48,7 @@ final class EditorViewModel: ObservableObject {
 
 
     var runCost: Int {
-        if tool == .resize && resize.fit == .aiExtend { return 2 }
+        if tool == .resize && resize.fit == .aiExtend { return Limits.aiExtend }
         return tool.runCost
     }
 
@@ -86,7 +88,10 @@ final class EditorViewModel: ObservableObject {
         guard tool == .enhance, let source = sourcePixels else { return nil }
         let scale = CGFloat(max(1, enhance.scale))
         let longest = max(source.width, source.height)
-        let allowedInput = min(longest, 4096 / scale)
+        var allowedInput = min(longest, 4096 / scale)
+        if !isPro && Self.usesFreeInputCap(tool) {
+            allowedInput = min(allowedInput, CGFloat(FreeTier.maxInputSide))
+        }
         let ratio = allowedInput / max(longest, 1)
         let width = Int((source.width * ratio * scale).rounded())
         let height = Int((source.height * ratio * scale).rounded())
@@ -125,6 +130,9 @@ final class EditorViewModel: ObservableObject {
         autoModeApplied = false
         phase = .ready
         Haptics.tap()
+
+        let pixels = sourcePixels.map { Int(($0.width * $0.height / 1_000_000).rounded()) } ?? 0
+        AppAnalytics.log(AppAnalytics.Event.photoPicked, ["tool": tool.id, "megapixels": pixels])
 
         Task {
             let found = await ImagePrep.hasFaces(in: display)
@@ -191,6 +199,12 @@ final class EditorViewModel: ObservableObject {
         let prompt: String?
     }
 
+    /// Tools whose cost grows with photo size; free users get a smaller upload there.
+    /// Resize and Color keep full size because their result depends on the exact pixel dimensions.
+    private static func usesFreeInputCap(_ tool: Tool) -> Bool {
+        tool == .enhance || tool == .background || tool == .blur
+    }
+
     func run(library: LibraryStore, isPro: Bool, refund: @escaping () -> Void) {
         guard phase == .ready, let data = originalData else {
             refund()
@@ -206,11 +220,14 @@ final class EditorViewModel: ObservableObject {
 
         let usedTool = tool
         let beforeImage = originalImage
+        let startedAt = Date()
+        let runInfo: [String: Any] = ["tool": usedTool.id, "cost": runCost]
+        AppAnalytics.log(AppAnalytics.Event.runStart, runInfo)
 
         runTask = Task { [weak self] in
             guard let self else { return }
             do {
-                let outcome = try await self.perform(data: data)
+                let outcome = try await self.perform(data: data, isPro: isPro)
                 try Task.checkCancellation()
 
                 guard let display = ImageIOHelper.downsampledImage(data: outcome.data, maxPixel: 2400) else {
@@ -229,19 +246,29 @@ final class EditorViewModel: ObservableObject {
                                              prompt: outcome.prompt,
                                              isTransparent: self.resultIsTransparent)
                 self.savedItem = item
+                var info = runInfo
+                info["seconds"] = Int(Date().timeIntervalSince(startedAt).rounded())
+                AppAnalytics.log(AppAnalytics.Event.runSuccess, info)
             } catch is CancellationError {
                 refund()
                 self.phase = .ready
+                AppAnalytics.log(AppAnalytics.Event.runCancel, runInfo)
             } catch let error as ClaidError {
                 refund()
                 self.errorMessage = error.errorDescription
                 self.phase = .ready
                 Haptics.error()
+                var info = runInfo
+                info["error"] = error.analyticsCode
+                AppAnalytics.log(AppAnalytics.Event.runFail, info)
             } catch {
                 refund()
                 self.errorMessage = "Something went wrong. Please try again."
                 self.phase = .ready
                 Haptics.error()
+                var info = runInfo
+                info["error"] = "unknown"
+                AppAnalytics.log(AppAnalytics.Event.runFail, info)
             }
         }
     }
@@ -257,7 +284,7 @@ final class EditorViewModel: ObservableObject {
         }
     }
 
-    private func perform(data: Data) async throws -> Outcome {
+    private func perform(data: Data, isPro: Bool) async throws -> Outcome {
         let client = ClaidClient.shared
 
         if tool == .magic {
@@ -281,7 +308,8 @@ final class EditorViewModel: ObservableObject {
         }
 
         guard let plan = plan() else { throw ClaidError.badResponse }
-        let side = plan.maxInputSide
+        let cappedForFree = !isPro && Self.usesFreeInputCap(tool)
+        let side: CGFloat = cappedForFree ? min(plan.maxInputSide, CGFloat(FreeTier.maxInputSide)) : plan.maxInputSide
         let jpeg = await Task.detached(priority: .userInitiated) { () -> Data? in
             ImagePrep.uploadJPEG(from: data, maxSide: side, quality: 0.93)
         }.value

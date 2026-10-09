@@ -23,6 +23,7 @@ struct RootView: View {
                     .transition(.opacity)
             } else {
                 OnboardingView {
+                    AppAnalytics.log(AppAnalytics.Event.onboardingComplete)
                     withAnimation(.easeInOut(duration: 0.5)) { onboardingDone = true }
                 }
                 .transition(.opacity)
@@ -34,7 +35,7 @@ struct RootView: View {
                     .zIndex(10)
             }
         }
-        .proPaywall(isPresented: $showLaunchPaywall)
+        .proPaywall(isPresented: $showLaunchPaywall, placement: "launch")
         .task {
      
             try? await Task.sleep(nanoseconds: 2_100_000_000)
@@ -42,6 +43,9 @@ struct RootView: View {
 
             guard onboardingDone, !subscription.isPro else { return }
             try? await Task.sleep(nanoseconds: 700_000_000)
+            // In the EU the consent form may be on screen right now; wait so the two don't collide.
+            await ads.waitForConsentFlow(timeout: 20)
+            guard !subscription.isPro else { return }
             showLaunchPaywall = true
         }
         .task(id: onboardingDone) {
@@ -53,6 +57,7 @@ struct RootView: View {
             if phase == .active {
                 usage.rollIfNeeded()
                 Task { await subscription.refreshEntitlements() }
+                Task { await RemoteSettings.shared.refresh() }
             }
         }
     }

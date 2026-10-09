@@ -63,6 +63,15 @@ struct MainTabView: View {
                            startPoint: .top, endPoint: .bottom)
                 .ignoresSafeArea()
         )
+        .background(
+            GeometryReader { proxy in
+                Color.clear
+                    .onAppear { router.bottomBarMinY = proxy.frame(in: .global).minY }
+                    .onChange(of: proxy.frame(in: .global).minY) { value in
+                        router.bottomBarMinY = value
+                    }
+            }
+        )
     }
 
     private var tabBar: some View {

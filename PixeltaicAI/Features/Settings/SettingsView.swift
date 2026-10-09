@@ -16,13 +16,6 @@ struct SettingsView: View {
     @State private var isRestoring = false
     @State private var alertText: String?
 
-    private var versionText: String {
-        let info = Bundle.main.infoDictionary
-        let version = (info?["CFBundleShortVersionString"] as? String) ?? "1.0"
-        let build = (info?["CFBundleVersion"] as? String) ?? "1"
-        return "Version \(version) (\(build))"
-    }
-
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 24) {
@@ -91,9 +84,6 @@ struct SettingsView: View {
                     Text("Clarity AI")
                         .font(.app(.footnote, weight: .bold))
                         .foregroundColor(Theme.textSecondary)
-                    Text(versionText)
-                        .font(.app(.caption))
-                        .foregroundColor(Theme.textTertiary)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.top, 4)
@@ -102,7 +92,7 @@ struct SettingsView: View {
             .padding(.top, 12)
             .padding(.bottom, 24)
         }
-        .proPaywall(isPresented: $showPaywall)
+        .proPaywall(isPresented: $showPaywall, placement: "settings")
         .sheet(isPresented: $showShare) {
             if let url = URL(string: AppLinks.appStore) {
                 ShareSheet(items: [url])
@@ -135,10 +125,10 @@ struct SettingsView: View {
                         .foregroundColor(subscription.isPro ? Color(hex: 0x3A1E00) : Theme.textSecondary)
                 }
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(subscription.isPro ? "Clarity Ai Pro" : "Free plan")
+                    Text(subscription.isPro ? "Clarity AI Pro" : "Free plan")
                         .font(.app(.headline, weight: .bold))
                         .foregroundColor(.white)
-                    Text(subscription.isPro ? "No ads, unlimited runs, 4× upscale" : "Upgrade for no ads and unlimited runs")
+                    Text(planSubtitle)
                         .font(.app(.caption))
                         .foregroundColor(Theme.textSecondary)
                         .multilineTextAlignment(.leading)
@@ -159,6 +149,12 @@ struct SettingsView: View {
             .glassCard(radius: 24)
         }
         .buttonStyle(PressableStyle(scale: 0.98))
+    }
+
+    private var planSubtitle: String {
+        guard subscription.isPro else { return "Upgrade for no ads and higher daily limits" }
+        let left = usage.proRemaining(limit: subscription.proDailyLimit)
+        return "No ads, 4× upscale · \(left) of \(subscription.proDailyLimit) runs left today"
     }
 
     private var usageCard: some View {
@@ -263,12 +259,14 @@ struct SettingsView: View {
     private func restore() {
         guard !isRestoring else { return }
         isRestoring = true
+        AppAnalytics.log(AppAnalytics.Event.restoreTap, ["placement": "settings"])
         Task {
             let restored = await subscription.restore()
             isRestoring = false
+            AppAnalytics.log(AppAnalytics.Event.restoreResult, ["restored": restored ? 1 : 0, "placement": "settings"])
             if restored {
                 Haptics.success()
-                alertText = "Welcome back! Clarity Ai Pro is active."
+                alertText = "Welcome back! Clarity AI Pro is active."
             } else {
                 alertText = "We couldn't find an active subscription for this Apple ID."
             }

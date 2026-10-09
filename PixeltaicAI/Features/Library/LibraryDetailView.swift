@@ -21,8 +21,18 @@ struct LibraryDetailView: View {
     @State private var showPermissionAlert = false
     @State private var isSaving = false
     @State private var errorText: String?
+    @State private var scrollBottomY: CGFloat = 0
 
     private var item: LibraryItem? { library.item(with: itemID) }
+
+    /// This page is pushed inside the Library tab, underneath the banner + tab bar. If the scroll
+    /// view's bottom edge reaches into that strip, the last buttons end up behind the bar, so
+    /// reserve exactly the overlapping height as extra room at the end of the content.
+    private var barClearance: CGFloat {
+        let barTop = router.bottomBarMinY
+        guard barTop > 0, scrollBottomY > barTop else { return 0 }
+        return scrollBottomY - barTop
+    }
 
     var body: some View {
         ZStack {
@@ -39,15 +49,24 @@ struct LibraryDetailView: View {
                             editMore(item)
                         }
                         .padding(.horizontal, 16)
-                        .padding(.bottom, 28)
+                        .padding(.bottom, 28 + barClearance)
                     }
+                    .background(
+                        GeometryReader { proxy in
+                            Color.clear
+                                .onAppear { scrollBottomY = proxy.frame(in: .global).maxY }
+                                .onChange(of: proxy.frame(in: .global).maxY) { value in
+                                    scrollBottomY = value
+                                }
+                        }
+                    )
                 }
             }
         }
         .toolbar(.hidden, for: .navigationBar)
         .toast($toast)
         .task(id: itemID) { await loadImages() }
-        .proPaywall(isPresented: $showPaywall)
+        .proPaywall(isPresented: $showPaywall, placement: "library")
         .sheet(isPresented: $showShare) {
             if let shareURL { ShareSheet(items: [shareURL]) }
         }
@@ -106,7 +125,7 @@ struct LibraryDetailView: View {
     private func imageArea(_ item: LibraryItem) -> some View {
         if let after = afterImage {
             if item.hasBefore, let before = beforeImage {
-                BeforeAfterSlider(before: before, after: after, transparent: item.isTransparent)
+                BeforeAfterSlider(before: before, after: after, transparent: item.isTransparent, verticalScrollFriendly: true)
             } else {
                 ImageCanvas(image: after, transparent: item.isTransparent)
             }
