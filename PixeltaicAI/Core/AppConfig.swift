@@ -60,8 +60,9 @@ enum Limits {
 
 
 enum AdConfig {
-    static let testBanner = "ca-app-pub-4749079164629106/4520100368"
-    static let testRewarded = "ca-app-pub-4749079164629106/6913320256"
+    /// Google's official sample units: Debug builds must never request (or tap) real ads.
+    static let testBanner = "ca-app-pub-3940256099942544/2934735716"
+    static let testRewarded = "ca-app-pub-3940256099942544/1712485313"
 
     static let liveBanner = "ca-app-pub-4749079164629106/4520100368"
     static let liveRewarded = "ca-app-pub-4749079164629106/6913320256"
