@@ -75,7 +75,8 @@ enum Tool: String, CaseIterable, Identifiable {
         case .blur: return Limits.blur
         case .magic: return Limits.magic
         case .create: return Limits.createCost(images: 1)
-        case .background, .color, .resize: return 1
+        case .background: return Limits.background
+        case .color, .resize: return 1
         }
     }
 

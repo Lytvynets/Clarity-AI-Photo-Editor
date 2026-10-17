@@ -255,9 +255,26 @@ struct CreateView: View {
                     .font(.app(.headline, weight: .bold))
                     .foregroundColor(.white)
                 if !subscription.isPro {
+                    if cost > usage.dailyLimit {
+                        // Costs more than the free daily budget, so say so up front.
+                        HStack(spacing: 4) {
+                            Image(systemName: "crown.fill").font(.system(size: 9, weight: .bold))
+                            Text("Pro tool")
+                                .font(.app(.caption2, weight: .semibold))
+                        }
+                        .foregroundColor(Theme.gold)
+                    } else {
+                        HStack(spacing: 4) {
+                            Image(systemName: "bolt.fill").font(.system(size: 9, weight: .bold))
+                            Text("\(usage.remaining) free runs left")
+                                .font(.app(.caption2, weight: .semibold))
+                        }
+                        .foregroundColor(Theme.textSecondary)
+                    }
+                } else if subscription.isTrial {
                     HStack(spacing: 4) {
                         Image(systemName: "bolt.fill").font(.system(size: 9, weight: .bold))
-                        Text("\(usage.remaining) free runs left")
+                        Text("\(usage.proRemaining(limit: subscription.proDailyLimit, trial: true)) trial runs left")
                             .font(.app(.caption2, weight: .semibold))
                     }
                     .foregroundColor(Theme.textSecondary)
@@ -293,7 +310,7 @@ struct CreateView: View {
                 HStack(spacing: 10) {
                     Image(systemName: "wand.and.stars")
                     Text("Generate")
-                    if !subscription.isPro {
+                    if !subscription.isPro || subscription.isTrial {
                         Text(cost == 1 ? "1 run" : "\(cost) runs")
                             .font(.app(.caption, weight: .bold))
                             .padding(.horizontal, 8)
@@ -400,21 +417,29 @@ struct CreateView: View {
         Haptics.medium()
 
         let isPro = subscription.isPro
+        let isTrial = subscription.isTrial
         let charged = cost
         let start: () -> Void = {
             vm.generate(library: library, isPro: isPro, refund: {
-                if isPro { usage.proRefund(charged) } else { usage.refund(charged) }
+                if isPro { usage.proRefund(charged, trial: isTrial) } else { usage.refund(charged) }
             })
         }
         if isPro {
             let limit = subscription.proDailyLimit
-            guard usage.proCanAfford(charged, limit: limit) else {
-                vm.errorMessage = "You've reached today's Pro limit. \(usage.resetText)."
+            guard usage.proCanAfford(charged, limit: limit, trial: isTrial) else {
+                vm.errorMessage = usage.proLimitMessage(cost: charged, trial: isTrial)
                 Haptics.warning()
-                AppAnalytics.log(AppAnalytics.Event.proLimitReached, ["tool": Tool.create.id, "limit": limit])
+                AppAnalytics.log(AppAnalytics.Event.proLimitReached,
+                                 ["tool": Tool.create.id, "limit": limit, "cost": charged, "trial": isTrial ? 1 : 0])
                 return
             }
-            usage.proConsume(charged)
+            usage.proConsume(charged, trial: isTrial)
+            start()
+        } else if usage.introRunAvailable && usage.canAfford(charged) {
+            // Welcome run: the first result on this device comes without a video in the way.
+            usage.noteIntroRun()
+            usage.consume(charged)
+            AppAnalytics.log(AppAnalytics.Event.gateSkipped, ["tool": Tool.create.id, "cost": charged])
             start()
         } else {
             gateRequest = RunGateRequest(cost: charged, title: "Create", tool: Tool.create.id, action: start)
@@ -542,11 +567,13 @@ struct CreateView: View {
             let prepared = await Task.detached(priority: .userInitiated) { () -> Data in
                 ExportService.prepared(data, watermark: watermark)
             }.value
+            var offerPro = false
             do {
                 try await ExportService.saveToPhotos(prepared)
                 toast = "Saved to Photos"
                 Haptics.success()
                 AppAnalytics.log(AppAnalytics.Event.resultSave, ["tool": Tool.create.id, "watermark": watermark ? 1 : 0])
+                offerPro = watermark && PaywallTiming.shouldOfferAfterSave()
             } catch ExportError.permissionDenied {
                 showPermissionAlert = true
             } catch {
@@ -554,6 +581,11 @@ struct CreateView: View {
                 Haptics.error()
             }
             isSaving = false
+            if offerPro {
+                // The image is saved: let "Saved to Photos" register, then offer to remove the watermark.
+                try? await Task.sleep(nanoseconds: 1_200_000_000)
+                openPaywall("after_save")
+            }
         }
     }
 

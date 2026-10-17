@@ -71,6 +71,8 @@ enum AppAnalytics {
         static let rewardedSkipped = "rewarded_skipped"
         static let rewardedUnavailable = "rewarded_unavailable"
         static let proLimitReached = "pro_limit_reached"
+        /// A welcome run that went ahead without the video.
+        static let gateSkipped = "gate_skipped_intro"
     }
 
     static func log(_ event: String, _ parameters: [String: Any] = [:]) {

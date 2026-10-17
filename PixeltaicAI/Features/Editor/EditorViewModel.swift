@@ -47,9 +47,73 @@ final class EditorViewModel: ObservableObject {
     }
 
 
+    /// Run units this run costs. Enhance and upscaling resizes are priced by the size of the result
+    /// (the AI service charges by output size); every other tool has a fixed price.
     var runCost: Int {
-        if tool == .resize && resize.fit == .aiExtend { return Limits.aiExtend }
-        return tool.runCost
+        switch tool {
+        case .enhance: return enhanceCost
+        case .resize: return resizeCost
+        default: return tool.runCost
+        }
+    }
+
+    /// Free runs are limited to the free upscale; subscribers get everything they asked for.
+    private var effectiveEnhanceScale: Int {
+        let wanted = max(1, enhance.scale)
+        return isPro ? wanted : min(wanted, FreeTier.maxUpscaleFree)
+    }
+
+    /// Size of the photo that gets uploaded and of the enhanced result, for the current plan.
+    private var enhanceSizes: (upload: CGSize, result: CGSize)? {
+        guard let source = sourcePixels, source.width > 0, source.height > 0 else { return nil }
+        let scale = CGFloat(effectiveEnhanceScale)
+        let longest = max(source.width, source.height)
+        var allowedInput = min(longest, 4096 / scale)
+        if !isPro && Self.usesFreeInputCap(.enhance) {
+            allowedInput = min(allowedInput, Self.freeUploadSide(for: .enhance, scale: effectiveEnhanceScale))
+        }
+        let ratio = allowedInput / longest
+        let upload = CGSize(width: source.width * ratio, height: source.height * ratio)
+        let result = CGSize(width: upload.width * scale, height: upload.height * scale)
+        return (upload, result)
+    }
+
+    private var enhanceCost: Int {
+        let base = Limits.enhance
+        guard let sizes = enhanceSizes else { return base }
+        let megapixels = Double(sizes.result.width * sizes.result.height) / 1_000_000
+        // The extra "sharpen details" pass costs one more credit, so it is a Pro option.
+        let polish = (isPro && enhance.polish) ? 1 : 0
+        return max(base, Limits.upscaleUnits(megapixels: megapixels)) + polish
+    }
+
+    private var resizeCost: Int {
+        let request = ToolRequestBuilder.resize(resize, source: sourcePixels)
+        var units = 0
+        let resizing = request.operations["resizing"] as? [String: Any]
+        if let fit = resizing?["fit"] as? String, fit == "outpaint" {
+            units += Limits.aiExtend
+        }
+        if request.operations["restorations"] != nil,
+           let target = ToolRequestBuilder.resizeTarget(resize, source: sourcePixels) {
+            let megapixels = Double(target.width * target.height) / 1_000_000
+            units += Limits.upscaleUnits(megapixels: megapixels)
+        }
+        return max(1, units)
+    }
+
+    /// Megapixels the AI has to produce for this run (Enhance and upscaling resizes), for analytics.
+    private var outputMegapixels: Double? {
+        switch tool {
+        case .enhance:
+            guard let sizes = enhanceSizes else { return nil }
+            return Double(sizes.result.width * sizes.result.height) / 1_000_000
+        case .resize:
+            guard let target = ToolRequestBuilder.resizeTarget(resize, source: sourcePixels) else { return nil }
+            return Double(target.width * target.height) / 1_000_000
+        default:
+            return nil
+        }
     }
 
     var actionTitle: String {
@@ -85,16 +149,9 @@ final class EditorViewModel: ObservableObject {
     }
 
     var enhanceOutputText: String? {
-        guard tool == .enhance, let source = sourcePixels else { return nil }
-        let scale = CGFloat(max(1, enhance.scale))
-        let longest = max(source.width, source.height)
-        var allowedInput = min(longest, 4096 / scale)
-        if !isPro && Self.usesFreeInputCap(tool) {
-            allowedInput = min(allowedInput, CGFloat(FreeTier.maxInputSide))
-        }
-        let ratio = allowedInput / max(longest, 1)
-        let width = Int((source.width * ratio * scale).rounded())
-        let height = Int((source.height * ratio * scale).rounded())
+        guard tool == .enhance, let sizes = enhanceSizes else { return nil }
+        let width = Int(sizes.result.width.rounded())
+        let height = Int(sizes.result.height.rounded())
         return "\(width) × \(height) px"
     }
 
@@ -205,6 +262,14 @@ final class EditorViewModel: ObservableObject {
         tool == .enhance || tool == .background || tool == .blur
     }
 
+    /// Longest side (px) a free photo is uploaded at. Enhance is priced by the size of the result,
+    /// so a smaller upscale may start from a bigger photo and still end at the same free size.
+    private static func freeUploadSide(for tool: Tool, scale: Int) -> CGFloat {
+        let cap = CGFloat(FreeTier.maxInputSide)
+        guard tool == .enhance else { return cap }
+        return cap * CGFloat(FreeTier.maxUpscaleFree) / CGFloat(max(1, scale))
+    }
+
     func run(library: LibraryStore, isPro: Bool, refund: @escaping () -> Void) {
         guard phase == .ready, let data = originalData else {
             refund()
@@ -221,7 +286,11 @@ final class EditorViewModel: ObservableObject {
         let usedTool = tool
         let beforeImage = originalImage
         let startedAt = Date()
-        let runInfo: [String: Any] = ["tool": usedTool.id, "cost": runCost]
+        var startInfo: [String: Any] = ["tool": usedTool.id, "cost": runCost]
+        if let megapixels = outputMegapixels {
+            startInfo["out_mp"] = (megapixels * 10).rounded() / 10
+        }
+        let runInfo = startInfo
         AppAnalytics.log(AppAnalytics.Event.runStart, runInfo)
 
         runTask = Task { [weak self] in
@@ -273,9 +342,16 @@ final class EditorViewModel: ObservableObject {
         }
     }
 
-    private func plan() -> RequestPlan? {
+    private func plan(isPro: Bool) -> RequestPlan? {
         switch tool {
-        case .enhance: return ToolRequestBuilder.enhance(enhance)
+        case .enhance:
+            var params = enhance
+            if !isPro {
+                // Free runs: no more than the free upscale and no extra polish pass.
+                params.scale = min(max(1, params.scale), FreeTier.maxUpscaleFree)
+                params.polish = false
+            }
+            return ToolRequestBuilder.enhance(params)
         case .background: return ToolRequestBuilder.background(background)
         case .blur: return ToolRequestBuilder.blur(blur)
         case .color: return ToolRequestBuilder.color(color)
@@ -307,9 +383,13 @@ final class EditorViewModel: ObservableObject {
             return Outcome(data: result, title: prompt, transparent: false, prompt: prompt)
         }
 
-        guard let plan = plan() else { throw ClaidError.badResponse }
-        let cappedForFree = !isPro && Self.usesFreeInputCap(tool)
-        let side: CGFloat = cappedForFree ? min(plan.maxInputSide, CGFloat(FreeTier.maxInputSide)) : plan.maxInputSide
+        guard let plan = plan(isPro: isPro) else { throw ClaidError.badResponse }
+        var uploadSide: CGFloat = plan.maxInputSide
+        if !isPro && Self.usesFreeInputCap(tool) {
+            let scale = min(max(1, enhance.scale), FreeTier.maxUpscaleFree)
+            uploadSide = min(uploadSide, Self.freeUploadSide(for: tool, scale: scale))
+        }
+        let side = uploadSide
         let jpeg = await Task.detached(priority: .userInitiated) { () -> Data? in
             ImagePrep.uploadJPEG(from: data, maxSide: side, quality: 0.93)
         }.value

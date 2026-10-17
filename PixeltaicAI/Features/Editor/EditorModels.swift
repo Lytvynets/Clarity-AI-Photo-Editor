@@ -332,6 +332,36 @@ enum ToolRequestBuilder {
     }
 
 
+    /// Size in pixels a resize produces, as far as it is known before the request goes out.
+    /// It mirrors how `resize(_:source:)` reads the settings and is used to price the run.
+    static func resizeTarget(_ params: ResizeParams, source: CGSize?) -> CGSize? {
+        guard let source, source.width > 0, source.height > 0 else { return nil }
+        switch params.mode {
+        case .preset:
+            return CGSize(width: CGFloat(params.preset.width), height: CGFloat(params.preset.height))
+        case .custom:
+            let w = Int(params.widthText.trimmed)
+            let h = Int(params.heightText.trimmed)
+            if let w, let h {
+                return CGSize(width: CGFloat(w), height: CGFloat(h))
+            }
+            if let w {
+                return CGSize(width: CGFloat(w), height: CGFloat(w) * source.height / source.width)
+            }
+            if let h {
+                return CGSize(width: CGFloat(h) * source.width / source.height, height: CGFloat(h))
+            }
+            return nil
+        case .percent:
+            let factor = CGFloat(params.percent / 100)
+            let longest = max(source.width, source.height)
+            // The upload is capped when scaling up (see `resize`), so the result can't exceed that cap.
+            let upload = factor > 1 ? min(longest, 4096 / factor) : longest
+            let ratio = upload / longest * factor
+            return CGSize(width: source.width * ratio, height: source.height * ratio)
+        }
+    }
+
     static func resize(_ params: ResizeParams, source: CGSize?) -> RequestPlan {
         var width: Any = "auto"
         var height: Any = "auto"

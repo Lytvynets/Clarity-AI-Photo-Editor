@@ -81,18 +81,38 @@ struct EnhancePanel: View {
                 OptionRow(items: denoiseItems, selection: $vm.enhance.denoise)
             }
 
-            Toggle(isOn: $vm.enhance.polish) {
+            Toggle(isOn: polishBinding) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Sharpen details")
-                        .font(.app(.subheadline, weight: .semibold))
-                        .foregroundColor(Theme.textPrimary)
+                    HStack(spacing: 6) {
+                        Text("Sharpen details")
+                            .font(.app(.subheadline, weight: .semibold))
+                            .foregroundColor(Theme.textPrimary)
+                        if !isPro {
+                            Image(systemName: "lock.fill")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(Theme.gold)
+                        }
+                    }
                     Text("Redraws soft areas while keeping the structure")
                         .font(.app(.caption))
                         .foregroundColor(Theme.textTertiary)
                 }
             }
             .tint(Theme.violet)
+            .overlay {
+                // The extra polish pass is a Pro option: a tap on the free version opens the paywall.
+                if !isPro {
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture { onLocked() }
+                }
+            }
         }
+    }
+
+    private var polishBinding: Binding<Bool> {
+        Binding(get: { isPro && vm.enhance.polish },
+                set: { vm.enhance.polish = $0 })
     }
 
     private var modeItems: [OptionItem<UpscaleMode>] {

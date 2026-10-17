@@ -152,8 +152,8 @@ struct SettingsView: View {
     }
 
     private var planSubtitle: String {
-        guard subscription.isPro else { return "Upgrade for no ads and higher daily limits" }
-        let left = usage.proRemaining(limit: subscription.proDailyLimit)
+        guard subscription.isPro else { return "Unlock Magic Edit, Create, 4× upscale and no ads" }
+        let left = usage.proRemaining(limit: subscription.proDailyLimit, trial: subscription.isTrial)
         return "No ads, 4× upscale · \(left) of \(subscription.proDailyLimit) runs left today"
     }
 
@@ -176,7 +176,9 @@ struct SettingsView: View {
                         .frame(height: 8)
                 }
             }
-            Text("\(usage.resetText). Watch a short video to unlock each run.")
+            Text(usage.isLimitedByLifetime && usage.remaining == 0
+                 ? "You've used the free runs included on this device. Go Pro to keep creating."
+                 : "\(usage.resetText). Watch a short video to unlock each run.")
                 .font(.app(.caption))
                 .foregroundColor(Theme.textTertiary)
         }

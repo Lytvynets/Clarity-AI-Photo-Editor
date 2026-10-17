@@ -46,6 +46,8 @@ struct RootView: View {
             // In the EU the consent form may be on screen right now; wait so the two don't collide.
             await ads.waitForConsentFlow(timeout: 20)
             guard !subscription.isPro else { return }
+            // Not on every single launch: a returning person sees it at most once per gap (Remote Config).
+            guard PaywallTiming.launchAllowed() else { return }
             showLaunchPaywall = true
         }
         .task(id: onboardingDone) {

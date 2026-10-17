@@ -114,9 +114,26 @@ struct EditorView: View {
                     .font(.app(.headline, weight: .bold))
                     .foregroundColor(.white)
                 if !subscription.isPro {
+                    if vm.runCost > usage.dailyLimit {
+                        // Costs more than the free daily budget, so say so up front.
+                        HStack(spacing: 4) {
+                            Image(systemName: "crown.fill").font(.system(size: 9, weight: .bold))
+                            Text("Pro tool")
+                                .font(.app(.caption2, weight: .semibold))
+                        }
+                        .foregroundColor(Theme.gold)
+                    } else {
+                        HStack(spacing: 4) {
+                            Image(systemName: "bolt.fill").font(.system(size: 9, weight: .bold))
+                            Text("\(usage.remaining) free runs left")
+                                .font(.app(.caption2, weight: .semibold))
+                        }
+                        .foregroundColor(Theme.textSecondary)
+                    }
+                } else if subscription.isTrial {
                     HStack(spacing: 4) {
                         Image(systemName: "bolt.fill").font(.system(size: 9, weight: .bold))
-                        Text("\(usage.remaining) free runs left")
+                        Text("\(usage.proRemaining(limit: subscription.proDailyLimit, trial: true)) trial runs left")
                             .font(.app(.caption2, weight: .semibold))
                     }
                     .foregroundColor(Theme.textSecondary)
@@ -272,7 +289,7 @@ struct EditorView: View {
             HStack(spacing: 10) {
                 Image(systemName: "sparkles")
                 Text(vm.actionTitle)
-                if !subscription.isPro {
+                if !subscription.isPro || subscription.isTrial {
                     Text(vm.runCost == 1 ? "1 run" : "\(vm.runCost) runs")
                         .font(.app(.caption, weight: .bold))
                         .padding(.horizontal, 8)
@@ -295,23 +312,31 @@ struct EditorView: View {
 
         let cost = vm.runCost
         let isPro = subscription.isPro
+        let isTrial = subscription.isTrial
         let start: () -> Void = {
             vm.run(library: library, isPro: isPro, refund: {
-                if isPro { usage.proRefund(cost) } else { usage.refund(cost) }
+                if isPro { usage.proRefund(cost, trial: isTrial) } else { usage.refund(cost) }
             })
         }
 
         if isPro {
             // Subscribers are not metered per tool, but every AI call costs real money, so there is
-            // a generous daily fair-use cap (smaller during the free trial).
+            // a generous daily fair-use cap (smaller during the free trial, which also has a total cap).
             let limit = subscription.proDailyLimit
-            guard usage.proCanAfford(cost, limit: limit) else {
-                vm.errorMessage = "You've reached today's Pro limit. \(usage.resetText)."
+            guard usage.proCanAfford(cost, limit: limit, trial: isTrial) else {
+                vm.errorMessage = usage.proLimitMessage(cost: cost, trial: isTrial)
                 Haptics.warning()
-                AppAnalytics.log(AppAnalytics.Event.proLimitReached, ["tool": vm.tool.id, "limit": limit])
+                AppAnalytics.log(AppAnalytics.Event.proLimitReached,
+                                 ["tool": vm.tool.id, "limit": limit, "cost": cost, "trial": isTrial ? 1 : 0])
                 return
             }
-            usage.proConsume(cost)
+            usage.proConsume(cost, trial: isTrial)
+            start()
+        } else if usage.introRunAvailable && usage.canAfford(cost) {
+            // Welcome run: the first result on this device comes without a video in the way.
+            usage.noteIntroRun()
+            usage.consume(cost)
+            AppAnalytics.log(AppAnalytics.Event.gateSkipped, ["tool": vm.tool.id, "cost": cost])
             start()
         } else {
             gateRequest = RunGateRequest(cost: cost, title: vm.tool.title, tool: vm.tool.id, action: start)
@@ -437,11 +462,13 @@ struct EditorView: View {
             let prepared = await Task.detached(priority: .userInitiated) { () -> Data in
                 ExportService.prepared(data, watermark: watermark)
             }.value
+            var offerPro = false
             do {
                 try await ExportService.saveToPhotos(prepared)
                 toast = "Saved to Photos"
                 Haptics.success()
                 AppAnalytics.log(AppAnalytics.Event.resultSave, ["tool": vm.tool.id, "watermark": watermark ? 1 : 0])
+                offerPro = watermark && PaywallTiming.shouldOfferAfterSave()
             } catch ExportError.permissionDenied {
                 showPermissionAlert = true
             } catch {
@@ -449,6 +476,11 @@ struct EditorView: View {
                 Haptics.error()
             }
             isSaving = false
+            if offerPro {
+                // The photo is saved: let "Saved to Photos" register, then offer to remove the watermark.
+                try? await Task.sleep(nanoseconds: 1_200_000_000)
+                openPaywall("after_save")
+            }
         }
     }
 

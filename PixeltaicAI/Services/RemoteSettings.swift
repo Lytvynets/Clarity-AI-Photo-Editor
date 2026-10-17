@@ -20,27 +20,43 @@ final class RemoteSettings: @unchecked Sendable {
 
     enum IntKey: String, CaseIterable {
         case freeDailyUnits = "free_daily_units"
+        case freeLifetimeUnits = "free_lifetime_units"
+        case freeNoAdRuns = "free_noad_runs"
+        case freeIntroRuns = "free_intro_runs"
+        case launchPaywallGapHours = "launch_paywall_gap_hours"
+        case savePaywallAt = "save_paywall_at"
         case trialDailyUnits = "trial_daily_units"
+        case trialTotalUnits = "trial_total_units"
         case proDailyUnits = "pro_daily_units"
         case costEnhance = "cost_enhance"
+        case costBackground = "cost_background"
         case costBlur = "cost_blur"
         case costMagic = "cost_magic"
         case costCreate = "cost_create"
         case costAIExtend = "cost_ai_extend"
         case freeMaxInputSide = "free_max_input_side"
+        case enhanceMPPerUnitX10 = "enhance_mp_per_unit_x10"
 
         /// Used until (or unless) the console provides a value.
         var fallback: Int {
             switch self {
-            case .freeDailyUnits: return 4
-            case .trialDailyUnits: return 10
-            case .proDailyUnits: return 30
+            case .freeDailyUnits: return 2
+            case .freeLifetimeUnits: return 14
+            case .freeNoAdRuns: return 2
+            case .freeIntroRuns: return 1
+            case .launchPaywallGapHours: return 20
+            case .savePaywallAt: return 1
+            case .trialDailyUnits: return 4
+            case .trialTotalUnits: return 12
+            case .proDailyUnits: return 12
             case .costEnhance: return 2
+            case .costBackground: return 2
             case .costBlur: return 2
             case .costMagic: return 3
             case .costCreate: return 3
             case .costAIExtend: return 2
-            case .freeMaxInputSide: return 2048
+            case .freeMaxInputSide: return 1024
+            case .enhanceMPPerUnitX10: return 22
             }
         }
 
@@ -48,10 +64,17 @@ final class RemoteSettings: @unchecked Sendable {
         var allowed: ClosedRange<Int> {
             switch self {
             case .freeDailyUnits: return 1...20
+            case .freeLifetimeUnits: return 0...1000      // 0 = no lifetime limit
+            case .freeNoAdRuns: return 0...50
+            case .freeIntroRuns: return 0...5             // runs per device that skip the video
+            case .launchPaywallGapHours: return 0...720   // 0 = paywall on every launch
+            case .savePaywallAt: return 0...50            // 0 = never; N = on the Nth save
             case .trialDailyUnits: return 3...200
+            case .trialTotalUnits: return 3...500
             case .proDailyUnits: return 5...500
-            case .costEnhance, .costBlur, .costMagic, .costCreate, .costAIExtend: return 1...10
+            case .costEnhance, .costBackground, .costBlur, .costMagic, .costCreate, .costAIExtend: return 1...10
             case .freeMaxInputSide: return 1024...4096
+            case .enhanceMPPerUnitX10: return 5...100     // megapixels of upscaled output per run unit, times 10
             }
         }
     }

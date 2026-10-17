@@ -26,6 +26,13 @@ enum ProductID {
 enum FreeTier {
     /// Daily budget of "run units" without a subscription (tunable in Remote Config).
     static var dailyRunUnits: Int { RemoteSettings.shared.int(.freeDailyUnits) }
+    /// Run units one device can spend on the free plan in total, however many days it takes
+    /// (0 = no such limit). Counted in the Keychain, so reinstalling the app does not reset it.
+    static var lifetimeRunUnits: Int { RemoteSettings.shared.int(.freeLifetimeUnits) }
+    /// How many free runs a device may get without watching a video (when no ad can be shown).
+    static var noAdRuns: Int { RemoteSettings.shared.int(.freeNoAdRuns) }
+    /// Free runs per device that skip the video, so the very first result comes without friction.
+    static var introRuns: Int { RemoteSettings.shared.int(.freeIntroRuns) }
     /// Longest side (px) a free-tier photo is sent to the AI at. Smaller uploads cost fewer
     /// Claid credits; Pro keeps full quality.
     static var maxInputSide: Int { RemoteSettings.shared.int(.freeMaxInputSide) }
@@ -45,12 +52,26 @@ enum Limits {
     static var proDailyUnits: Int { RemoteSettings.shared.int(.proDailyUnits) }
     /// 3-day free trial: tighter, because a trial that gets cancelled brings no revenue.
     static var trialDailyUnits: Int { RemoteSettings.shared.int(.trialDailyUnits) }
+    /// Everything one device can spend during free trials, in total. A trial that is cancelled
+    /// before the first payment must not cost more than this, however often it is restarted.
+    static var trialTotalUnits: Int { RemoteSettings.shared.int(.trialTotalUnits) }
 
+    /// Cheapest price of an Enhance run; bigger results cost more (see `upscaleUnits`).
     static var enhance: Int { RemoteSettings.shared.int(.costEnhance) }
+    static var background: Int { RemoteSettings.shared.int(.costBackground) }
     static var blur: Int { RemoteSettings.shared.int(.costBlur) }
     static var magic: Int { RemoteSettings.shared.int(.costMagic) }
     /// Resize with "AI extend" paints new background (generative), so it costs more than a plain resize.
     static var aiExtend: Int { RemoteSettings.shared.int(.costAIExtend) }
+
+    /// Run units for an AI upscale that produces `megapixels` of output. Claid prices upscaling by the
+    /// size of the result (1 to 11 credits), so a 12 MP result must cost more than a 2 MP one.
+    static func upscaleUnits(megapixels: Double) -> Int {
+        guard megapixels.isFinite, megapixels > 0 else { return 1 }
+        let perUnit = max(0.5, Double(RemoteSettings.shared.int(.enhanceMPPerUnitX10)) / 10.0)
+        let units = (megapixels / perUnit).rounded(.up)
+        return min(11, max(1, Int(units)))
+    }
 
     /// One image costs the base price; every extra image in the same prompt adds one unit.
     static func createCost(images: Int) -> Int {

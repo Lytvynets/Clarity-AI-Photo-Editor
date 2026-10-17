@@ -98,22 +98,30 @@ struct StudioView: View {
             heroCard(title: "Create with AI",
                      subtitle: "Turn words into images",
                      symbol: "wand.and.rays",
-                     colors: [Theme.fuchsia, Theme.violet]) {
+                     colors: [Theme.fuchsia, Theme.violet],
+                     locked: needsPro(Limits.createCost(images: 1))) {
                 router.openCreate()
             }
             heroCard(title: "Magic Edit",
                      subtitle: "Change photos with a prompt",
                      symbol: "sparkles",
-                     colors: [Theme.blue, Theme.violet]) {
+                     colors: [Theme.blue, Theme.violet],
+                     locked: needsPro(Limits.magic)) {
                 router.openEditor(tool: .magic)
             }
         }
+    }
+
+    /// A tool that costs more than the free daily budget is Pro only: mark it, so it is no surprise.
+    private func needsPro(_ cost: Int) -> Bool {
+        !subscription.isPro && cost > FreeTier.dailyRunUnits
     }
 
     private func heroCard(title: String,
                           subtitle: String,
                           symbol: String,
                           colors: [Color],
+                          locked: Bool,
                           action: @escaping () -> Void) -> some View {
         Button {
             Haptics.tap()
@@ -152,6 +160,12 @@ struct StudioView: View {
                 RoundedRectangle(cornerRadius: 26, style: .continuous)
                     .strokeBorder(Color.white.opacity(0.24), lineWidth: 1)
             )
+            .overlay(alignment: .topTrailing) {
+                if locked {
+                    ProBadge(compact: true)
+                        .padding(12)
+                }
+            }
             .shadow(color: (colors.first ?? Theme.violet).opacity(0.4), radius: 16, x: 0, y: 8)
         }
         .buttonStyle(PressableStyle())
@@ -273,7 +287,7 @@ struct StudioView: View {
                     Text("Go Pro")
                         .font(.app(.headline, weight: .bold))
                         .foregroundColor(.white)
-                    Text("No ads · Higher daily limits · 4× upscale")
+                    Text("Magic Edit & Create · 4× upscale · No ads")
                         .font(.app(.caption))
                         .foregroundColor(Theme.textSecondary)
                         .multilineTextAlignment(.leading)

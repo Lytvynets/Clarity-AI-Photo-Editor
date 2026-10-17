@@ -43,6 +43,9 @@ struct RunGateSheet: View {
             if request.cost > 1 { text += " This one uses \(request.cost) runs." }
             return text
         }
+        if usage.isLimitedByLifetime {
+            return "You've used the free runs included on this device. Go Pro to keep creating."
+        }
         return "\(usage.resetText). Go Pro to keep creating right now."
     }
 
@@ -188,10 +191,14 @@ struct RunGateSheet: View {
                 approve()
             case .unavailable:
                 AppAnalytics.log(AppAnalytics.Event.rewardedUnavailable, info)
-                if FreeTier.allowRunWhenAdUnavailable {
+                // Only a few runs per device may skip the video: a run without an ad earns nothing.
+                if FreeTier.allowRunWhenAdUnavailable && usage.canRunWithoutAd {
+                    usage.noteRunWithoutAd()
                     approve()
                 } else {
-                    notice = "No video is available right now. Please try again in a moment."
+                    notice = ads.adsAllowed
+                        ? "No video is available right now. Please try again in a moment."
+                        : "Free runs need a short video. Allow ads in Settings › Ad privacy choices, or go Pro."
                 }
             case .skipped:
                 AppAnalytics.log(AppAnalytics.Event.rewardedSkipped, info)

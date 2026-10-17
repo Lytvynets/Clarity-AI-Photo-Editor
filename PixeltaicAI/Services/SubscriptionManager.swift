@@ -18,6 +18,8 @@ final class SubscriptionManager: ObservableObject {
     @Published private(set) var isTrial: Bool
     @Published private(set) var products: [Product] = []
     @Published private(set) var trialEligible = false
+    /// Products whose introductory offer (free trial or discounted start) this Apple ID can still use.
+    @Published private(set) var introEligibleIDs: Set<String> = []
     @Published private(set) var isLoadingProducts = false
     @Published private(set) var isPurchasing = false
 
@@ -75,16 +77,30 @@ final class SubscriptionManager: ObservableObject {
         do {
             let fetched = try await Product.products(for: ProductID.all)
             products = fetched
-            if let trial = fetched.first(where: { $0.id == ProductID.weeklyTrial }),
-               let info = trial.subscription,
-               info.introductoryOffer != nil {
-                trialEligible = await info.isEligibleForIntroOffer
-            } else {
-                trialEligible = false
-            }
+            await refreshIntroEligibility()
         } catch {
             print("⚠️ Could not load products: \(error)")
         }
+    }
+
+    /// Works out which products still have an introductory offer this Apple ID may use. Whatever is
+    /// set up in App Store Connect (free trial, discounted first week, ...) is picked up from here.
+    func refreshIntroEligibility() async {
+        var eligible = Set<String>()
+        for product in products {
+            guard let info = product.subscription, info.introductoryOffer != nil else { continue }
+            let usable = await info.isEligibleForIntroOffer
+            if usable { eligible.insert(product.id) }
+        }
+        if introEligibleIDs != eligible { introEligibleIDs = eligible }
+        let trialOffered = eligible.contains(ProductID.weeklyTrial)
+        if trialEligible != trialOffered { trialEligible = trialOffered }
+    }
+
+    /// The offer to advertise for this product (nil when it has none, or it was already used).
+    func intro(for product: Product, period: String) -> IntroOffer? {
+        guard introEligibleIDs.contains(product.id) else { return nil }
+        return IntroOffer.make(for: product, period: period)
     }
 
     func refreshEntitlements() async {
@@ -99,6 +115,8 @@ final class SubscriptionManager: ObservableObject {
             if transaction.offerType == .introductory { inTrial = true }
         }
         setPro(active, trial: active && inTrial)
+        // A used-up offer must not keep being advertised until the next launch.
+        if !products.isEmpty { await refreshIntroEligibility() }
     }
 
     private func setPro(_ value: Bool, trial: Bool = false) {

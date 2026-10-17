@@ -16,7 +16,9 @@ struct PaywallView: View {
     @Environment(\.openURL) private var openURL
     @EnvironmentObject private var subscription: SubscriptionManager
 
-    @State private var selectedID: String = ProductID.yearly
+    /// Empty until the person taps a plan; `selectedPlan` then falls back to the plan with an
+    /// introductory offer (a cheap way in), or to the yearly plan when no offer is available.
+    @State private var selectedID: String = ""
     @State private var glow = false
     @State private var breathe = false
     @State private var appeared = false
@@ -43,12 +45,25 @@ struct PaywallView: View {
 
     private var features: [(symbol: String, text: String)] {
         [
-            ("nosign", "No ads, ever"),
+            ("wand.and.stars", "Magic Edit & Create"),
             ("arrow.up.left.and.arrow.down.right", "4× AI upscale"),
+            ("photo.fill", "Full-resolution results"),
             ("bolt.fill", limitsFeature),
-            ("square.grid.2x2.fill", "Up to 4 images per prompt"),
+            ("nosign", "No ads, ever"),
             ("checkmark.seal.fill", "Clean exports, no watermark")
         ]
+    }
+
+    /// The line under the title follows what the person was doing when the paywall opened.
+    private var subtitle: String {
+        switch placement {
+        case "after_save", "editor_watermark", "create_watermark":
+            return "Save and share without the watermark."
+        case "run_gate", "editor_locked", "create_locked":
+            return "Unlock every tool and keep creating."
+        default:
+            return "Everything unlocked. Nothing in your way."
+        }
     }
 
 
@@ -59,7 +74,8 @@ struct PaywallView: View {
         let badge: String?
         let detail: String
         let period: String
-        let trial: Bool
+        /// Introductory offer (free trial, discounted start) this person can still use, if any.
+        let intro: IntroOffer?
     }
 
     private var plans: [Plan] {
@@ -68,37 +84,43 @@ struct PaywallView: View {
             let perWeek = subscription.perWeekPrice(of: yearly, weeks: 52)
             var badge = "BEST VALUE"
             if let saving = subscription.yearlySavingsPercent { badge = "SAVE \(saving)%" }
-            result.append(Plan(id: yearly.id, product: yearly, title: "Yearly", badge: badge,
-                               detail: "Just \(perWeek) per week", period: "year", trial: false))
+            let intro = subscription.intro(for: yearly, period: "year")
+            result.append(Plan(id: yearly.id, product: yearly, title: "Yearly",
+                               badge: intro?.badge ?? badge,
+                               detail: intro?.detail ?? "Just \(perWeek) per week",
+                               period: "year", intro: intro))
         }
         if let monthly = subscription.monthly {
-            result.append(Plan(id: monthly.id, product: monthly, title: "Monthly", badge: nil,
-                               detail: "Flexible, cancel anytime", period: "month", trial: false))
+            let intro = subscription.intro(for: monthly, period: "month")
+            result.append(Plan(id: monthly.id, product: monthly, title: "Monthly",
+                               badge: intro?.badge,
+                               detail: intro?.detail ?? "Flexible, cancel anytime",
+                               period: "month", intro: intro))
         }
         if let weekly = subscription.weekly {
-            let trial = weekly.id == ProductID.weeklyTrial && subscription.trialEligible
+            let intro = subscription.intro(for: weekly, period: "week")
             result.append(Plan(id: weekly.id, product: weekly, title: "Weekly",
-                               badge: trial ? "3 DAYS FREE" : nil,
-                               detail: trial ? "Try free, then \(weekly.displayPrice) per week" : "Billed every week",
-                               period: "week", trial: trial))
+                               badge: intro?.badge,
+                               detail: intro?.detail ?? "Billed every week",
+                               period: "week", intro: intro))
         }
         return result
     }
 
     private var selectedPlan: Plan? {
-        plans.first { $0.id == selectedID } ?? plans.first
+        let all = plans
+        if let chosen = all.first(where: { $0.id == selectedID }) { return chosen }
+        return all.first(where: { $0.intro != nil }) ?? all.first
     }
 
     private var ctaTitle: String {
         guard let plan = selectedPlan else { return "Continue" }
-        return plan.trial ? "Start free trial" : "Continue"
+        return plan.intro?.cta ?? "Continue"
     }
 
     private var disclosure: String {
         guard let plan = selectedPlan else { return "" }
-        if plan.trial {
-            return "3-day free trial, then \(plan.product.displayPrice) per week. Cancel anytime in Settings."
-        }
+        if let intro = plan.intro { return intro.disclosure }
         return "\(plan.product.displayPrice) per \(plan.period). Renews automatically until cancelled."
     }
 
@@ -131,6 +153,7 @@ struct PaywallView: View {
             withAnimation(.easeOut(duration: 0.7)) { appeared = true }
             if !loggedView {
                 loggedView = true
+                PaywallTiming.markShown()
                 AppAnalytics.log(AppAnalytics.Event.paywallView, ["placement": placement])
             }
         }
@@ -209,7 +232,7 @@ struct PaywallView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
 
-            Text("Everything unlocked. Nothing in your way.")
+            Text(subtitle)
                 .font(.app(compact ? .footnote : .subheadline))
                 .foregroundColor(Theme.textSecondary)
                 .multilineTextAlignment(.center)
@@ -419,7 +442,8 @@ struct PaywallView: View {
         Haptics.medium()
         let info: [String: Any] = [
             "product_id": plan.id,
-            "trial": plan.trial ? 1 : 0,
+            "trial": (plan.intro?.isFree ?? false) ? 1 : 0,
+            "offer": plan.intro?.kind ?? "none",
             "placement": placement
         ]
         AppAnalytics.log(AppAnalytics.Event.purchaseStart, info)
